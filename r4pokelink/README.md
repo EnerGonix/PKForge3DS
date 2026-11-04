@@ -13,10 +13,9 @@ Two tabs, one checkbox per save:
   backed up to `sd:/3ds/PKForge/r4backups/`, rewritten in place (FAT and directory untouched) and read
   back; on a mismatch the old save is put back.
 
-Status (0.3): the card handshake works on an r4isdhc.hk 2024 card, but its microSD is not ready after
-R4 PokéLink power-cycles the slot (the card's own loader normally initialises it). When reading fails,
-R4 PokéLink writes a diagnosis to `sd:/3ds/PKForge/r4pokelink.log` and the card's loader to
-`sd:/3ds/PKForge/r4dump/`, to work out that initialisation.
+Status: copying, writing back and deleting saves work on an r4isdhc.hk 2024 card, started from
+PKForge's R4 button. If the R4's microSD cannot be read, R4 PokéLink writes a diagnosis to
+`sd:/3ds/PKForge/r4pokelink.log` and changes nothing.
 
 ## Cards
 
@@ -25,12 +24,12 @@ r4isdhc.hk carts 2020+ and their derivatives.
 
 ## Use
 
-1. Put `R4PokeLink.nds` in `sd:/roms/nds/` on the 3DS SD card.
-2. With the R4 in the cartridge slot, start R4 PokéLink from TWiLight Menu++ (it must run in DSi mode).
-3. It lists the Pokémon saves in `/roms/nds`, `/roms/gba`, `/roms/gb` and `/roms/gbc` on the R4.
-   A (or a tap) marks a save, Y marks all or none, L/R switch tabs, X copies the marked ones.
-   Saves the game never wrote (all `FF` or `00`) are left out.
-4. Open PKForge from the Homebrew Launcher: the saves are under "R4".
+1. With the R4 in the cartridge slot, press the **R4** button in PKForge. PKForge carries R4 PokéLink and
+   installs it as a hidden DSiWare title (TWiLight Menu++ is the fallback), so it runs in DSi mode.
+2. It lists the Pokémon saves in `/roms/nds`, `/roms/gba`, `/roms/gb` and `/roms/gbc` on the R4.
+   A (or a tap) marks a save, Y marks all or none, L/R switch tabs, X copies the marked ones, SELECT
+   deletes (with a backup first). Saves the game never wrote (all `FF` or `00`) are left out.
+3. HOME, then PKForge again: the saves are under "R4".
 
 Everything R4 PokéLink does is logged in `sd:/3ds/PKForge/r4pokelink.log`.
 

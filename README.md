@@ -7,6 +7,16 @@ editor and Bank for Android. PKForge itself is C# on .NET MAUI and PKHeX.Core, w
 from) for reading and writing saves.
 
 It opens on a title screen (PKForge's logo over the Android splash colour; touch or A to go on).
+
+## ⭐ R4 PokéLink: the saves on your R4 card, edited on the 3DS
+
+New in this port. If you play DS, GBA or Game Boy Pokémon games on an **R4 (Ace3DS) flashcart**, their
+saves live on the R4's own microSD, out of reach of every 3DS save editor. **R4 PokéLink**
+([`r4pokelink/`](r4pokelink)) talks to the R4 straight from the cartridge slot: PKForge's **R4 button**
+starts it, it copies the R4's Pokémon saves to the 3DS SD card for PKForge to edit, and writes the edited
+saves back to the R4. No PC, no taking the microSD out. Every write to the R4 backs the save up first and
+reads it back to check it. Developed and tested on an r4isdhc.hk 2024 card.
+
 ## Screenshots
 
 Top and bottom screens, captured in Azahar.
