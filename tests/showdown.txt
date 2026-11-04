@@ -1,0 +1,43 @@
+# Showdown: exports the test title's box 1 slot 1 as a set, then imports sdmc:/3ds/PKForge/showdown/import.txt
+# into the empty slots (nothing is written to the save).
+wait 60
+open title:000400000FF3FF00
+wait 40
+press X
+wait 15
+press DOWN
+wait 12
+press DOWN
+wait 12
+press DOWN
+wait 12
+press DOWN
+wait 12
+shot sd01_menu
+press A
+wait 20
+shot sd02_exported
+press A
+wait 10
+press START
+wait 15
+press DOWN
+wait 12
+press DOWN
+wait 12
+press DOWN
+wait 12
+press DOWN
+wait 12
+press DOWN
+wait 12
+press DOWN
+wait 12
+shot sd03_startmenu
+press A
+wait 30
+shot sd04_imported
+press A
+wait 10
+shot sd05_box
+quit

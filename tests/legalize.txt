@@ -1,0 +1,20 @@
+# Opens the test title's save and runs START > Legalize this box (nothing is written).
+wait 60
+open title:000400000FF3FF00
+wait 40
+press START
+wait 15
+shot lg01_menu
+press DOWN
+wait 12
+press DOWN
+wait 12
+press DOWN
+wait 12
+press DOWN
+wait 12
+shot lg02_pointed
+press A
+wait 20
+shot lg03_result
+quit

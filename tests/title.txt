@@ -1,0 +1,23 @@
+# Opens the fake test title's save (000400000FF3FF00, which no game uses) through the FS
+# service, moves a party Pokémon into box 1 and writes it back with commit and backup.
+wait 60
+open title:000400000FF3FF00
+wait 40
+shot ti01_opened
+touch 284 69
+wait 10
+press RIGHT
+wait 3
+press A
+wait 5
+touch 284 69
+wait 10
+press A
+wait 10
+shot ti02_moved
+press Y
+wait 8
+press A
+wait 40
+shot ti03_written
+quit

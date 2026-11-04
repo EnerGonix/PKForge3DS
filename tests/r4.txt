@@ -1,0 +1,33 @@
+# Opens the R4's Pokémon saves (copied to sdmc:/3ds/PKForge/saves/R4) and looks at each; writes nothing.
+wait 150
+shot r01_home
+open sdmc:/3ds/PKForge/saves/R4/nds/Pokemon - Black Version 2 (USA, Europe) (NDSi Enhanced).sav
+wait 40
+shot r02_black2
+touch 284 69
+wait 10
+shot r03_black2_party
+press B
+wait 15
+open sdmc:/3ds/PKForge/saves/R4/nds/Pokemon - White Version (USA, Europe) (NDSi Enhanced).sav
+wait 40
+touch 284 69
+wait 10
+shot r04_white_party
+press B
+wait 15
+open sdmc:/3ds/PKForge/saves/R4/nds/Pokemon - Platinum Version (USA).sav
+wait 40
+touch 284 69
+wait 10
+shot r05_platinum_party
+press B
+wait 15
+open sdmc:/3ds/PKForge/saves/R4/gba/Pokemon - Emerald Version (USA, Europe).sav
+wait 40
+touch 284 69
+wait 10
+shot r06_emerald_party
+press B
+wait 15
+quit

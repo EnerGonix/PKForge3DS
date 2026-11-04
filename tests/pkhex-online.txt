@@ -1,0 +1,20 @@
+# Legalize with PKHeX against a local-gpss (or a stand-in) at the address in
+# sdmc:/3ds/PKForge/legality-server.txt. Opens the test title's save; nothing is written.
+wait 60
+open title:000400000FF3FF00
+wait 40
+press X
+wait 15
+press DOWN
+wait 12
+press DOWN
+wait 12
+press DOWN
+wait 12
+shot ph01_menu
+press A
+wait 10
+shot ph02_waiting
+wait 120
+shot ph03_result
+quit

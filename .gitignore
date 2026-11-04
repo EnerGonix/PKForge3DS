@@ -1,0 +1,22 @@
+build/
+*.elf
+*.smdh
+*.3dsx
+*.cia
+*.cxi
+*.nds
+romfs/
+source/ui_ids.hpp
+icon.png
+
+# Third-party tools fetched separately (makerom from Project_CTR, bannertool from Epicpkmn11).
+*.exe
+
+# R4 PokéLink: build output and the R4 card dumps used to study it (not ours to share).
+r4pokelink/build/
+r4pokelink/analysis/
+
+# Local helpers and scratch files.
+tools/cia-qr.html
+fix_tmp.py
+*.bak

@@ -1,0 +1,11 @@
+# The R4 button: R4PokeLink.nds goes to the SD, TWiLight's settings.ini is kept aside and set to
+# auto-run it. Tests stop before the reboot (Azahar has no TWiLight).
+wait 60
+shot r4_01_home
+touch 120 180
+wait 15
+shot r4_02_confirm
+press A
+wait 15
+shot r4_03_done
+quit
