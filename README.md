@@ -7,6 +7,18 @@ editor and Bank for Android. PKForge itself is C# on .NET MAUI and PKHeX.Core, w
 from) for reading and writing saves.
 
 It opens on a title screen (PKForge's logo over the Android splash colour; touch or A to go on).
+## Screenshots
+
+Top and bottom screens, captured in Azahar.
+
+| Home | Boxes | Summary |
+|:---:|:---:|:---:|
+| ![Home](docs/screenshots/home.png) | ![Boxes](docs/screenshots/boxes.png) | ![Summary](docs/screenshots/summary-stats.png) |
+| **Editor** | **Bank** | **RNG / IVs** |
+| ![Editor](docs/screenshots/editor.png) | ![Bank](docs/screenshots/bank.png) | ![RNG](docs/screenshots/rng.png) |
+| **Dex Autopilot** | **Poképark** | **Color themes** |
+| ![Dex Autopilot](docs/screenshots/dex-autopilot.png) | ![Poképark](docs/screenshots/pokepark.png) | ![Fire theme](docs/screenshots/theme-fire.png) |
+
 The top screen is PKForge's second-screen inspector; the touch screen holds the boxes, editor and menus.
 
 ## What it does
