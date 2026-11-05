@@ -167,7 +167,9 @@ independently (section and Pokémon checksums).
 - DS cartridge saves over SPI: `source/spi.cpp` / `spi.hpp` from Checkpoint (Bernardo Giordano,
   FlagBrew) and TWLSaveTool (TuxSH), GPLv3 with Additional Terms 7.b and 7.c, marked as modified
   (logging removed).
-- PKSM's pixel chrome (GPLv3) and spritedmistery's PKForge logo, look and color schemes.
+- PKSM's pixel chrome (GPLv3) and spritedmistery's PKForge logo, look and color schemes. PKForge's author
+  and the artist of the logo and button images approved their use in this unofficial port
+  ([sofianeelhor/PKForge#73](https://github.com/sofianeelhor/PKForge/issues/73)).
 - Pokémon Showdown / Smogon sprite artists: front sprites and box icons.
 - PokeAPI (BSD-3): move, ability and Pokédex facts.
 - game-icons.net (CC-BY 3.0) icons; SteamGridDB community cartridge art.
