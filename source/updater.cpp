@@ -6,6 +6,8 @@
 #include "widgets.hpp"
 
 #include <3ds.h>
+#include <curl/curl.h>
+#include <malloc.h>
 #include <algorithm>
 #include <atomic>
 #include <cstdio>
@@ -24,7 +26,6 @@ namespace updater
         constexpr const char* API   = "https://api.github.com/repos/EnerGonix/PKForge3DS/releases/latest";
         constexpr const char* ASSET = "PKForge.cia";
         constexpr const char* STAMP = "sdmc:/3ds/PKForge/update-check.txt";
-        constexpr u64 SECOND        = 1000ULL * 1000 * 1000;
         constexpr u64 PKFORGE_TITLE = 0x000400000E4F0B00ULL;
 
         // ---------------------------------------------------------------- SHA-256 (FIPS 180-4)
@@ -142,6 +143,9 @@ namespace updater
             sscanf(s.c_str() + at, "%d.%d.%d", &v[0], &v[1], &v[2]);
         }
 
+        // A release tag as people read it: "3ds-v1.2.0" -> "v1.2.0".
+        std::string shown(const std::string& tag) { return tag.compare(0, 4, "3ds-") == 0 ? tag.substr(4) : tag; }
+
         bool newer(const std::string& tag)
         {
             int a[3], b[3];
@@ -163,105 +167,205 @@ namespace updater
             u64 size = 0;
         };
 
-        // The root certificates GitHub's servers chain to (romfs:/certs, exported from a PC's trusted store),
-        // added to every request so the connection is verified: the 3DS's own list predates them.
-        const std::vector<std::vector<u8>>& roots()
+        // The root certificates GitHub's servers chain to (romfs:/certs/*.der, exported from a PC's trusted
+        // store) as one PEM bundle for curl, so every connection is verified.
+        const std::string& roots()
         {
-            static std::vector<std::vector<u8>> certs;
+            static std::string pem;
             static bool loaded = false;
             if (!loaded)
             {
                 loaded = true;
+                static const char* B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
                 files::list("romfs:/certs", [](const std::string& name, bool dir, u64)
                     {
                         std::vector<u8> der;
-                        if (!dir && files::read("romfs:/certs/" + name, der) && !der.empty())
+                        if (dir || !files::read("romfs:/certs/" + name, der) || der.empty())
                         {
-                            certs.push_back(std::move(der));
+                            return;
                         }
+                        std::string b64;
+                        for (size_t i = 0; i < der.size(); i += 3)
+                        {
+                            u32 v = u32(der[i]) << 16 | (i + 1 < der.size() ? u32(der[i + 1]) << 8 : 0) |
+                                    (i + 2 < der.size() ? der[i + 2] : 0);
+                            b64 += B64[(v >> 18) & 63];
+                            b64 += B64[(v >> 12) & 63];
+                            b64 += i + 1 < der.size() ? B64[(v >> 6) & 63] : '=';
+                            b64 += i + 2 < der.size() ? B64[v & 63] : '=';
+                        }
+                        pem += "-----BEGIN CERTIFICATE-----\n";
+                        for (size_t i = 0; i < b64.size(); i += 64)
+                        {
+                            pem += b64.substr(i, 64) + "\n";
+                        }
+                        pem += "-----END CERTIFICATE-----\n";
                     });
             }
-            return certs;
+            return pem;
         }
 
-        // One verified GET through the system's HTTPS service, following GitHub's redirects. sink gets the body.
-        bool get(std::string url, const std::function<bool(const u8*, u32)>& sink, std::string& error)
+        // The network for curl: sockets (soc) and the SSL service (sslc, mbedtls's random numbers). The
+        // system's own HTTPS service (httpc) can't talk to GitHub on real consoles, so it isn't used.
+        // Shared by the background check and the update screen.
+        struct Net
         {
-            for (int hop = 0; hop < 5; hop++)
+            bool ok = false;
+
+            Net()
             {
-                httpcContext ctx;
-                if (R_FAILED(httpcOpenContext(&ctx, HTTPC_METHOD_GET, url.c_str(), 0)))
+                static bool lockReady = false;
+                if (!lockReady)
                 {
-                    error = "No connection (is the Wi-Fi on?).";
-                    return false;
+                    LightLock_Init(&lock());
+                    lockReady = true;
                 }
-                for (const auto& der : roots())
+                LightLock_Lock(&lock());
+                if (users() == 0)
                 {
-                    httpcAddTrustedRootCA(&ctx, der.data(), u32(der.size()));
-                }
-                httpcSetKeepAlive(&ctx, HTTPC_KEEPALIVE_DISABLED);
-                httpcAddRequestHeaderField(&ctx, "User-Agent", "PKForge-3DS-updater");
-                httpcAddRequestHeaderField(&ctx, "Accept", "*/*");
-                u32 status = 0;
-                Result res = httpcBeginRequest(&ctx);
-                if (R_SUCCEEDED(res))
-                {
-                    res = httpcGetResponseStatusCodeTimeout(&ctx, &status, 30 * SECOND);
-                }
-                if (R_FAILED(res))
-                {
-                    httpcCloseContext(&ctx);
-                    char text[120];
-                    snprintf(text, sizeof(text), "Could not reach GitHub securely (%08lX). Is the Wi-Fi on?",
-                        (unsigned long)res);
-                    error = text;
-                    return false;
-                }
-                if (status >= 300 && status < 400)
-                {
-                    char location[1024] = {};
-                    httpcGetResponseHeader(&ctx, "Location", location, sizeof(location) - 1);
-                    httpcCloseContext(&ctx);
-                    if (strncmp(location, "https://", 8) != 0)
+                    constexpr u32 SOC_SIZE = 0x100000;
+                    buffer()               = static_cast<u32*>(memalign(0x1000, SOC_SIZE));
+                    bool up = buffer() && R_SUCCEEDED(socInit(buffer(), SOC_SIZE));
+                    if (up && R_FAILED(sslcInit(0)))
                     {
-                        error = "GitHub sent the download somewhere unexpected.";
-                        return false;
+                        socExit();
+                        up = false;
                     }
-                    url = location;
-                    continue;
-                }
-                if (status != 200)
-                {
-                    httpcCloseContext(&ctx);
-                    error = "GitHub answered HTTP " + std::to_string(status) + ".";
-                    return false;
-                }
-                std::vector<u8> chunk(0x10000);
-                bool ok = true;
-                for (;;)
-                {
-                    u32 got     = 0;
-                    Result rr   = httpcDownloadData(&ctx, chunk.data(), u32(chunk.size()), &got);
-                    if (got && !sink(chunk.data(), got))
+                    if (!up)
                     {
-                        ok    = false;
-                        error = "Stopped.";
-                        break;
+                        free(buffer());
+                        buffer() = nullptr;
                     }
-                    if (rr != (Result)HTTPC_RESULTCODE_DOWNLOADPENDING)
+                    else
                     {
-                        if (R_FAILED(rr))
+                        static bool curlReady = false;
+                        if (!curlReady)
                         {
-                            ok    = false;
-                            error = "The download broke off. Try again near the router.";
+                            curl_global_init(CURL_GLOBAL_DEFAULT);
+                            curlReady = true;
                         }
-                        break;
                     }
+                    ok = up;
                 }
-                httpcCloseContext(&ctx);
-                return ok;
+                else
+                {
+                    ok = true;
+                }
+                if (ok)
+                {
+                    users()++;
+                }
+                LightLock_Unlock(&lock());
             }
-            error = "Too many redirects.";
+
+            ~Net()
+            {
+                if (!ok)
+                {
+                    return;
+                }
+                LightLock_Lock(&lock());
+                if (--users() == 0)
+                {
+                    sslcExit();
+                    socExit();
+                    free(buffer());
+                    buffer() = nullptr;
+                }
+                LightLock_Unlock(&lock());
+            }
+
+            static LightLock& lock()
+            {
+                static LightLock l;
+                return l;
+            }
+            static int& users()
+            {
+                static int n = 0;
+                return n;
+            }
+            static u32*& buffer()
+            {
+                static u32* b = nullptr;
+                return b;
+            }
+        };
+
+        struct Sink
+        {
+            const std::function<bool(const u8*, u32)>* sink;
+            bool stopped = false;
+        };
+
+        size_t onData(char* data, size_t size, size_t count, void* user)
+        {
+            Sink* s = static_cast<Sink*>(user);
+            if (!(*s->sink)(reinterpret_cast<const u8*>(data), u32(size * count)))
+            {
+                s->stopped = true;
+                return 0;
+            }
+            return size * count;
+        }
+
+        // One verified HTTPS GET with curl + mbedtls, following GitHub's redirects (https only). sink gets
+        // the body of the final answer.
+        bool get(const std::string& url, const std::function<bool(const u8*, u32)>& sink, std::string& error)
+        {
+            CURL* c = curl_easy_init();
+            if (!c)
+            {
+                error = "The download could not start.";
+                return false;
+            }
+            const std::string& pem = roots();
+            curl_blob ca{const_cast<char*>(pem.data()), pem.size(), CURL_BLOB_NOCOPY};
+            Sink s{&sink};
+            curl_easy_setopt(c, CURLOPT_URL, url.c_str());
+            curl_easy_setopt(c, CURLOPT_CAINFO_BLOB, &ca);
+            curl_easy_setopt(c, CURLOPT_PROTOCOLS_STR, "https");
+            curl_easy_setopt(c, CURLOPT_REDIR_PROTOCOLS_STR, "https");
+            curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
+            curl_easy_setopt(c, CURLOPT_MAXREDIRS, 5L);
+            curl_easy_setopt(c, CURLOPT_FAILONERROR, 1L);
+            curl_easy_setopt(c, CURLOPT_USERAGENT, "PKForge-3DS-updater");
+            curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, 30L);
+            curl_easy_setopt(c, CURLOPT_LOW_SPEED_LIMIT, 1L);
+            curl_easy_setopt(c, CURLOPT_LOW_SPEED_TIME, 40L);
+            curl_easy_setopt(c, CURLOPT_BUFFERSIZE, 0x20000L);
+            curl_easy_setopt(c, CURLOPT_NOSIGNAL, 1L);
+            curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, onData);
+            curl_easy_setopt(c, CURLOPT_WRITEDATA, &s);
+            CURLcode res = curl_easy_perform(c);
+            long status  = 0;
+            curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &status);
+            curl_easy_cleanup(c);
+            if (res == CURLE_OK)
+            {
+                return true;
+            }
+            char text[120];
+            switch (res)
+            {
+                case CURLE_WRITE_ERROR:
+                    snprintf(text, sizeof(text), "%s", s.stopped ? "Stopped." : "The download could not be saved.");
+                    break;
+                case CURLE_HTTP_RETURNED_ERROR: snprintf(text, sizeof(text), "GitHub answered HTTP %ld.", status); break;
+                case CURLE_COULDNT_RESOLVE_HOST:
+                case CURLE_COULDNT_CONNECT:
+                    snprintf(text, sizeof(text), "No connection to GitHub. Is the Wi-Fi on?");
+                    break;
+                case CURLE_OPERATION_TIMEDOUT:
+                case CURLE_PARTIAL_FILE:
+                case CURLE_RECV_ERROR:
+                    snprintf(text, sizeof(text), "The download broke off. Try again near the router.");
+                    break;
+                default:
+                    snprintf(text, sizeof(text), "Could not reach GitHub securely (curl %d: %s).", int(res),
+                        curl_easy_strerror(res));
+            }
+            error = text;
             return false;
         }
 
@@ -317,15 +421,15 @@ namespace updater
 
         void checkWork(void*)
         {
-            if (R_SUCCEEDED(httpcInit(0)))
+            Net net;
+            if (net.ok)
             {
                 Release r = latest();
-                httpcExit();
                 if (r.error.empty())
                 {
                     if (newer(r.tag))
                     {
-                        found = r.tag;
+                        found = shown(r.tag);
                     }
                     files::writeText(STAMP, std::to_string(today()));
                 }
@@ -358,14 +462,14 @@ namespace updater
         void checkJob(void* arg)
         {
             Job* j = static_cast<Job*>(arg);
-            if (R_FAILED(httpcInit(0)))
+            Net net;
+            if (!net.ok)
             {
-                j->error = "The 3DS's HTTP service did not start.";
+                j->error = "The 3DS's network service did not start.";
                 j->state = State::Failed;
                 return;
             }
             j->release = latest();
-            httpcExit();
             if (!j->release.error.empty())
             {
                 j->error = j->release.error;
@@ -380,15 +484,15 @@ namespace updater
         void installJob(void* arg)
         {
             Job* j = static_cast<Job*>(arg);
-            if (R_FAILED(httpcInit(0)))
+            Net net;
+            if (!net.ok)
             {
-                j->error = "The 3DS's HTTP service did not start.";
+                j->error = "The 3DS's network service did not start.";
                 j->state = State::Failed;
                 return;
             }
             if (R_FAILED(amInit()))
             {
-                httpcExit();
                 j->error = "The 3DS's installer (AM) did not start.";
                 j->state = State::Failed;
                 return;
@@ -398,7 +502,6 @@ namespace updater
             if (R_FAILED(res))
             {
                 amExit();
-                httpcExit();
                 char text[80];
                 snprintf(text, sizeof(text), "The installer refused to start (%08lX).", (unsigned long)res);
                 j->error = text;
@@ -458,7 +561,6 @@ namespace updater
                 AM_CancelCIAInstall(cia);
             }
             amExit();
-            httpcExit();
             j->error = error;
             j->state = ok ? State::Done : State::Failed;
         }
@@ -527,7 +629,7 @@ namespace updater
                         keys  = {{"B", "Close"}};
                         break;
                     case State::Available:
-                        snprintf(buf, sizeof(buf), "Version %s is out (this is %s).", job.release.tag.c_str(), PORT_VERSION);
+                        snprintf(buf, sizeof(buf), "Version %s is out (this is %s).", shown(job.release.tag).c_str(), PORT_VERSION);
                         line1 = buf;
                         snprintf(buf, sizeof(buf), "%.1f MB from GitHub. Your saves, Bank and settings stay.",
                             double(job.release.size) / (1024 * 1024));
@@ -537,7 +639,7 @@ namespace updater
                     case State::Installing:
                     {
                         u64 got = job.got, all = job.release.size ? job.release.size : 1;
-                        snprintf(buf, sizeof(buf), "Downloading and installing %s...", job.release.tag.c_str());
+                        snprintf(buf, sizeof(buf), "Downloading and installing %s...", shown(job.release.tag).c_str());
                         line1 = buf;
                         snprintf(buf, sizeof(buf), "%.1f / %.1f MB", double(got) / (1024 * 1024), double(all) / (1024 * 1024));
                         line2 = buf;
@@ -547,7 +649,7 @@ namespace updater
                         break;
                     }
                     case State::Done:
-                        line1 = "Installed " + job.release.tag + ".";
+                        line1 = "Installed " + shown(job.release.tag) + ".";
                         line2 = "PKForge restarts into the new version.";
                         keys  = {{"A", "Restart"}};
                         break;

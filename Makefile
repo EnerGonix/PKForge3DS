@@ -68,7 +68,7 @@ CXXFLAGS	:= $(CFLAGS) -fno-rtti -std=gnu++20 -Wno-psabi
 ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=3dsx.specs -g $(ARCH) -Wl,--gc-sections -Wl,-Map,$(notdir $*.map)
 
-LIBS	:= -lcitro2d -lcitro3d -lctru -lm
+LIBS	:= -lcurl -lmbedtls -lmbedx509 -lmbedcrypto -lz -lcitro2d -lcitro3d -lctru -lm
 
 LIBDIRS	:= $(CTRULIB) $(PORTLIBS)
 
