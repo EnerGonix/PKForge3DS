@@ -24,7 +24,6 @@ namespace
     {
     public:
         bool cursorSounds() const override { return false; }
-        bool wants3D() const override { return true; }
 
         explicit Title(std::function<void()> r) : ready(std::move(r))
         {
@@ -80,10 +79,7 @@ namespace
 
         void drawTop() override
         {
-            // In 3D: the sky far behind, the logo and the name out of the screen.
-            depth(8);
             sky(0, TOP_W);
-            depth(0);
             float bob = std::sin(t / 30.0f) * 4;
             // The logo's shadow on the ground, shrinking as it rises.
             float shade = 52 - bob * 2;
@@ -93,10 +89,8 @@ namespace
             }
             if (sheet)
             {
-                depth(-6);
                 C2D_DrawImageAt(logo, 30, 10 + bob, 0.5f, nullptr, 0.8f, 0.8f);
             }
-            depth(-3);
             // The name, with a cyan edge glowing slowly.
             float glow = 0.5f + 0.5f * std::sin(t / 40.0f);
             u8 a       = u8(90 + 120 * glow);
@@ -106,7 +100,6 @@ namespace
             rect(220, 132, 140, 1, T::Grid);
             text(290, 140, "Save editor  -  Bank  -  Poképark", T::SubInk, Center);
             text(290, 158, "3DS port by En3rGonix", T::InkSoft, Center);
-            depth(0);
             text(TOP_W - 6, 226, PKFORGE3DS_VERSION, T::SubInk, Right);
             fade(TOP_W);
         }
@@ -134,7 +127,7 @@ namespace
         // offset is where this screen starts in one 720-wide strip (the top 400, then the bottom 320).
         void sky(int offset, int width)
         {
-            vgrad(-8, 0, float(width) + 16, H, T::Void, T::Deep); // wider: in 3D it sits behind the screen
+            vgrad(0, 0, float(width), H, T::Void, T::Deep);
             for (auto& s : stars)
             {
                 float x = s.x - offset, y = s.y * 0.5f;

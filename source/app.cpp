@@ -388,7 +388,6 @@ namespace app
             }
             u64 t1 = svcGetSystemTick();
 
-            gfx::allow3D(stack.back()->wants3D());
             gfx::beginFrame();
             u64 t2 = svcGetSystemTick();
             int base = int(stack.size()) - 1;
@@ -396,13 +395,10 @@ namespace app
             {
                 base--;
             }
-            for (int eye = 0; eye < gfx::eyes(); eye++)
+            gfx::top();
+            for (int i = base; i < int(stack.size()); i++)
             {
-                gfx::top(eye);
-                for (int i = base; i < int(stack.size()); i++)
-                {
-                    stack[i]->drawTop();
-                }
+                stack[i]->drawTop();
             }
             gfx::bottom();
             for (int i = base; i < int(stack.size()); i++)

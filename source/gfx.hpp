@@ -69,18 +69,8 @@ namespace gfx
     void exit();
     void beginFrame();
     void endFrame();
-    // The top screen is drawn once per eye when the 3D slider is up and the screen asked for 3D
-    // (allow3D, set each frame by the app from Screen::wants3D), else once.
-    int eyes();
-    void allow3D(bool on);
-    void top(int eye = 0);
+    void top();
     void bottom();
-    // Stereoscopic depth of what is drawn next on the top screen: the pixels between the two eyes' images
-    // at a full 3D slider (each eye moves half). > 0 sits behind the screen, < 0 comes out of it, 0 is the
-    // screen itself; keep it within about 10 to stay comfortable. No effect in 2D or
-    // on the bottom screen. depthNow() is the current one, to put back after a layer.
-    void depth(float d);
-    float depthNow();
     // Clips drawing to a rectangle on the current screen (screen coordinates); none() resets.
     void clip(int x, int y, int w, int h);
     void unclip();

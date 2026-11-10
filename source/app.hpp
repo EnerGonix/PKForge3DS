@@ -23,8 +23,6 @@ public:
     // A soft tick plays when the D-pad / Circle Pad moves the cursor; screens where they do something
     // else (the park's camera, the title screen) turn it off.
     virtual bool cursorSounds() const { return true; }
-    // Stereoscopic 3D (the 3D slider) is only for screens that ask: the title screen's logo.
-    virtual bool wants3D() const { return false; }
 };
 
 namespace app

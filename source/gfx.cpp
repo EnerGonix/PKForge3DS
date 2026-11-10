@@ -16,14 +16,7 @@ namespace gfx
     namespace
     {
         C3D_RenderTarget* topTarget;
-        C3D_RenderTarget* topRight; // the right eye, drawn while the 3D slider is up
         C3D_RenderTarget* bottomTarget;
-        bool stereo     = false;
-        bool allowed    = false; // only screens that ask for 3D get it (the title screen)
-        float slider    = 0;
-        int eye         = 0;
-        float layer     = 0;
-        u32 frames      = 0;
         C3D_RenderTarget* current;
         int currentWidth = TOP_W;
         C2D_Font font;
@@ -55,7 +48,6 @@ namespace gfx
 
         std::string shotPath;
         u8* shotTop    = nullptr;
-        u8* shotRight  = nullptr; // the right eye's top screen, when the shot was taken in 3D
         u8* shotBottom = nullptr;
         int shotState  = 0; // 1: frame queued, read it at the next frame start
 
@@ -256,23 +248,6 @@ namespace gfx
                 fwrite(&pixels[y * rowSize], 1, rowSize, f);
             }
             fclose(f);
-            if (shotRight)
-            {
-                // The right eye as a second picture, the same size, beside it: <name>.right.bmp.
-                GSPGPU_InvalidateDataCache(shotRight, TOP_W * H * 3);
-                copy(shotRight, TOP_W, 0, 0);
-                std::string right = shotPath.substr(0, shotPath.size() - 4) + ".right.bmp";
-                if (FILE* r = fopen(right.c_str(), "wb"))
-                {
-                    fwrite(header, 1, 54, r);
-                    for (int y = Hh - 1; y >= 0; y--)
-                    {
-                        fwrite(&pixels[y * rowSize], 1, rowSize, r);
-                    }
-                    fclose(r);
-                }
-                shotRight = nullptr;
-            }
         }
     }
 
@@ -312,7 +287,6 @@ namespace gfx
         C2D_Init(8192);
         C2D_Prepare();
         topTarget    = C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
-        topRight     = C2D_CreateScreenTarget(GFX_TOP, GFX_RIGHT);
         bottomTarget = C2D_CreateScreenTarget(GFX_BOTTOM, GFX_LEFT);
 
         font = C2D_FontLoad("romfs:/font/nds12.bcfnt");
@@ -367,20 +341,7 @@ namespace gfx
             shotPath.clear();
         }
         C2D_TextBufClear(textBuf);
-        // 3D follows the slider: the right eye is only drawn while it is up.
-        slider    = osGet3DSliderState();
-        bool want = allowed && slider > 0.02f;
-        if (want != stereo)
-        {
-            stereo = want;
-            gfxSet3D(stereo);
-        }
-        frames++;
         C2D_TargetClear(topTarget, T::Void);
-        if (stereo)
-        {
-            C2D_TargetClear(topRight, T::Void);
-        }
         C2D_TargetClear(bottomTarget, T::Void);
     }
 
@@ -391,7 +352,6 @@ namespace gfx
         {
             // The framebuffers this frame's display transfer writes into.
             shotTop    = gfxGetFramebuffer(GFX_TOP, GFX_LEFT, nullptr, nullptr);
-            shotRight  = stereo ? gfxGetFramebuffer(GFX_TOP, GFX_RIGHT, nullptr, nullptr) : nullptr;
             shotBottom = gfxGetFramebuffer(GFX_BOTTOM, GFX_LEFT, nullptr, nullptr);
         }
         C3D_FrameEnd(0);
@@ -403,36 +363,15 @@ namespace gfx
 
     void requestShot(const std::string& path) { shotPath = path; }
 
-    int eyes() { return stereo ? 2 : 1; }
-
-    void allow3D(bool on) { allowed = on; }
-
-    void top(int e)
+    void top()
     {
-        eye     = stereo ? e : 0;
-        current = eye ? topRight : topTarget;
-        C2D_SceneBegin(current);
+        C2D_SceneBegin(topTarget);
+        current      = topTarget;
         currentWidth = TOP_W;
-        depth(0);
     }
-
-    void depth(float d)
-    {
-        layer = d;
-        C2D_ViewReset();
-        if (stereo && current != bottomTarget && d != 0)
-        {
-            float off = d * slider / 2;
-            C2D_ViewTranslate(eye ? off : -off, 0);
-        }
-    }
-
-    float depthNow() { return layer; }
 
     void bottom()
     {
-        layer = 0;
-        C2D_ViewReset();
         C2D_SceneBegin(bottomTarget);
         current      = bottomTarget;
         currentWidth = BOTTOM_W;
