@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """HOME menu art for PKForge: its logo (tools/ctr/icon-flat.png) raised into a tile with depth for the
 48x48 icon and the 256x128 banner, and the banner sound: tools/ctr/banner-sound.wav when present,
-else an original chiptune jingle (no game music). Usage: make_art.py <project dir>
+else an original jingle (an anvil strike and bells; no game music). Usage: make_art.py <project dir>
 Writes icon.png (used for the SMDH) and build/cia/banner.png + banner.wav (used by cia.sh)."""
 import shutil
 import math
@@ -137,69 +137,75 @@ def navy_glow(w, h, gx, gy, spread):
 
 
 # ---------------------------------------------------------------- the jingle (original)
+# A soft anvil strike (the forge), then a bright bell arpeggio rising into a chord, a sparkle on top and a
+# light echo. Stereo, 44.1 kHz, 16-bit, under 3 seconds: what the HOME Menu plays for a banner.
 
-RATE = 32000
+RATE = 44100
+LENGTH = 2.6
 
 
-def note(freq, length, volume=0.22, duty=0.5, slide=0.0):
-    out = []
-    n = int(RATE * length)
-    phase = 0.0
+def hz(semis):
+    return 440.0 * 2 ** (semis / 12)  # semitones from A4
+
+
+def strike(left, right, at, freq, volume, decay, partials, pan=0.0):
+    """One struck note: decaying sine partials (ratio, level); pan -1 left .. 1 right."""
+    start = int(at * RATE)
+    n = min(len(left) - start, int(decay * 6 * RATE))
+    gl, gr = volume * (1 - pan) / 2 ** 0.5, volume * (1 + pan) / 2 ** 0.5
     for i in range(n):
-        f = freq * (1 + slide * i / n)
-        phase += f / RATE
-        wave_ = 1.0 if (phase % 1.0) < duty else -1.0
-        env = min(1.0, i / 120) * (1 - i / n) ** 0.6
-        out.append(wave_ * volume * env)
-    return out
+        t = i / RATE
+        env = min(1.0, i / 90) * math.exp(-t / decay)
+        v = 0.0
+        for ratio, level in partials:
+            # Higher partials die away faster, like a real bell.
+            v += level * math.sin(2 * math.pi * freq * ratio * t) * math.exp(-t * ratio / (decay * 6))
+        left[start + i] += v * env * gl
+        right[start + i] += v * env * gr
 
 
-def rest(length):
-    return [0.0] * int(RATE * length)
-
-
-def click(volume=0.35):
-    # The ball wobbling: a short noisy tick with a falling pitch.
-    out, seed = [], 12345
-    for i in range(int(RATE * 0.045)):
-        seed = (seed * 1103515245 + 12345) & 0x7FFFFFFF
-        noise = (seed >> 16) / 32768.0 - 1
-        tone = math.sin(2 * math.pi * (900 - i * 6) * i / RATE)
-        out.append((noise * 0.5 + tone * 0.5) * volume * (1 - i / (RATE * 0.045)) ** 2)
-    return out
-
-
-def mix(*tracks):
-    n = max(len(t) for t in tracks)
-    return [sum(t[i] for t in tracks if i < len(t)) for i in range(n)]
+BELL = [(1, 1.0), (2.0, 0.35), (3.0, 0.12), (4.2, 0.05)]
+ANVIL = [(1, 1.0), (2.76, 0.5), (5.4, 0.25), (8.9, 0.1)]  # inharmonic: metal, not a note
 
 
 def jingle():
-    hz = lambda semis: 440.0 * 2 ** (semis / 12)  # semitones from A4
-    lead = []
-    # An upbeat rising call (G major arpeggio, then a turn).
-    for semis, length in [(-2, 0.09), (2, 0.09), (5, 0.09), (10, 0.18), (9, 0.09), (10, 0.27)]:
-        lead += note(hz(semis), length, duty=0.25)
-    lead += rest(0.12)
-    # Three wobbles of the ball...
-    for _ in range(3):
-        lead += click() + rest(0.17)
-    # ...and caught: a bright little fanfare with a sparkle on top.
-    fanfare = []
-    for semis, length in [(5, 0.08), (9, 0.08), (12, 0.08), (17, 0.34)]:
-        fanfare += note(hz(semis), length, volume=0.2, duty=0.125)
-    sparkle = rest(0.24) + note(hz(29), 0.05, 0.08, 0.5) + note(hz(33), 0.05, 0.07, 0.5) + note(hz(36), 0.09, 0.06, 0.5)
-    bass = note(hz(-14), 0.24, 0.16, 0.5) + note(hz(-7), 0.34, 0.16, 0.5)
-    lead += mix(fanfare, sparkle, bass)
-    return lead
+    n = int(LENGTH * RATE)
+    left, right = [0.0] * n, [0.0] * n
+    # The forge: a soft anvil ting, and a warm low note under it.
+    strike(left, right, 0.00, hz(-2) * 2, 0.32, 0.35, ANVIL, -0.2)
+    strike(left, right, 0.00, hz(-26), 0.30, 0.9, [(1, 1.0), (2, 0.2)])
+    # The bells: G major rising (G5 B5 D6 G6), then the chord rings with a sparkle.
+    for i, (at, semis) in enumerate([(0.30, 10), (0.40, 14), (0.50, 17), (0.62, 22)]):
+        strike(left, right, at, hz(semis), 0.26, 0.55, BELL, (-0.5, 0.5, -0.3, 0.3)[i])
+    for semis, pan in ((10, -0.4), (14, 0.0), (17, 0.4)):
+        strike(left, right, 0.80, hz(semis), 0.16, 0.9, BELL, pan)
+    strike(left, right, 0.80, hz(-14), 0.22, 1.0, [(1, 1.0), (2, 0.25)])
+    for at, semis, pan in ((0.95, 34, 0.6), (1.03, 38, -0.6), (1.11, 41, 0.5)):
+        strike(left, right, at, hz(semis), 0.07, 0.25, [(1, 1.0)], pan)
+    # A light echo, crossing sides.
+    delay = int(0.19 * RATE)
+    for i in range(delay, n):
+        left[i] += right[i - delay] * 0.28
+        right[i] += left[i - delay] * 0.28
+    # Fade the tail and leave headroom.
+    fade = int(0.5 * RATE)
+    for i in range(n - fade, n):
+        k = (n - i) / fade
+        left[i] *= k
+        right[i] *= k
+    peak = max(max(abs(x) for x in left), max(abs(x) for x in right))
+    g = 0.8 / peak
+    return [x * g for x in left], [x * g for x in right]
 
 
-def write_wav(path, samples):
+def write_wav(path, channels):
+    left, right = channels
     with wave.open(path, 'wb') as w:
-        w.setnchannels(1)
+        w.setnchannels(2)
         w.setsampwidth(2)
         w.setframerate(RATE)
-        w.writeframes(b''.join(struct.pack('<h', int(max(-1, min(1, s)) * 30000)) for s in samples))
+        w.writeframes(b''.join(struct.pack('<hh', int(max(-1, min(1, a)) * 32767), int(max(-1, min(1, b)) * 32767))
+                               for a, b in zip(left, right)))
 
 
 def main():
