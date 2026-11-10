@@ -374,6 +374,12 @@ namespace app
             {
                 break;
             }
+            constexpr u32 MOVES = KEY_DUP | KEY_DDOWN | KEY_DLEFT | KEY_DRIGHT | KEY_CPAD_UP | KEY_CPAD_DOWN |
+                                  KEY_CPAD_LEFT | KEY_CPAD_RIGHT;
+            if ((in.repeat & MOVES) && stack.back()->cursorSounds())
+            {
+                audio::sfx(audio::Sfx::Cursor);
+            }
             stack.back()->update(in);
             applyChanges();
             if (stack.empty())
@@ -382,6 +388,7 @@ namespace app
             }
             u64 t1 = svcGetSystemTick();
 
+            gfx::allow3D(stack.back()->wants3D());
             gfx::beginFrame();
             u64 t2 = svcGetSystemTick();
             int base = int(stack.size()) - 1;
@@ -389,10 +396,13 @@ namespace app
             {
                 base--;
             }
-            gfx::top();
-            for (int i = base; i < int(stack.size()); i++)
+            for (int eye = 0; eye < gfx::eyes(); eye++)
             {
-                stack[i]->drawTop();
+                gfx::top(eye);
+                for (int i = base; i < int(stack.size()); i++)
+                {
+                    stack[i]->drawTop();
+                }
             }
             gfx::bottom();
             for (int i = base; i < int(stack.size()); i++)

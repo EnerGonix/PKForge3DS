@@ -466,7 +466,7 @@ namespace audio
             int frames = 0;
         };
 
-        Clip clips[10];
+        Clip clips[11];
         Clip cryClip; // the last cry, reused
         int nextFx = 0;
 
@@ -506,6 +506,9 @@ namespace audio
             std::vector<float> v;
             soft(v, 880, 880, 0.035, 0.18); // a light tick
             clips[int(Sfx::Blip)] = makeClip(v);
+            v.clear();
+            soft(v, 1320, 1320, 0.018, 0.1); // the cursor's tick: shorter, higher, quieter
+            clips[int(Sfx::Cursor)] = makeClip(v);
             v.clear();
             soft(v, 587, 587, 0.06, 0.18);
             soft(v, 784, 784, 0.09, 0.16);
@@ -772,7 +775,7 @@ namespace audio
         {
             return;
         }
-        bool menu = s == Sfx::Blip || s == Sfx::Open || s == Sfx::Back || s == Sfx::Error;
+        bool menu = s == Sfx::Blip || s == Sfx::Open || s == Sfx::Back || s == Sfx::Error || s == Sfx::Cursor;
         play(clips[int(s)], menu ? 0.35f : 0.6f);
     }
 

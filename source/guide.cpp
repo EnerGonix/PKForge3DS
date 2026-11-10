@@ -49,6 +49,8 @@ namespace guide
         class Guide : public Screen
         {
         public:
+            bool cursorSounds() const override { return false; } // page turns have their own sound
+
             void update(Input& in) override
             {
                 if ((in.down & KEY_A) || (in.repeat & KEY_DRIGHT) || in.tapped(BOTTOM_W - 92, 186, 84, 24))

@@ -37,7 +37,8 @@ namespace audio
         Hop,
         Sparkle,
         Found,
-        Win
+        Win,
+        Cursor // the soft tick of a cursor move
     };
     void sfx(Sfx s);
     void cry(int species, float volume = 1);

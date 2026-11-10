@@ -214,6 +214,8 @@ namespace
     class Park : public Screen
     {
     public:
+        bool cursorSounds() const override { return false; } // the D-pad moves the camera here
+
         Park()
         {
             app::Timed timed("park ctor");
