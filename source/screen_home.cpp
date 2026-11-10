@@ -6,6 +6,9 @@
 #include "legality_online.hpp"
 #include "autopilot.hpp"
 #include "livingdex.hpp"
+#include "guide.hpp"
+#include "updater.hpp"
+#include "version.hpp"
 #include "gfx.hpp"
 #include "pkdata.hpp"
 #include "r4link.hpp"
@@ -157,6 +160,11 @@ namespace
                     app::message("Could not open", scripted);
                 }
                 return;
+            }
+            if (!updateNoticed && !updater::available().empty())
+            {
+                updateNoticed = true;
+                app::toast("PKForge " + updater::available() + " is out: START > Update");
             }
             if (saves::scanning() || wasScanning)
             {
@@ -431,7 +439,7 @@ namespace
     private:
         std::vector<SaveRef> list;
         int focus = 0, row = 0, button = 0, scrollX = 0, filter = 0;
-        bool wasScanning = true, dragging = false;
+        bool wasScanning = true, dragging = false, updateNoticed = false;
 
         void refresh()
         {
@@ -639,6 +647,9 @@ namespace
         void settings()
         {
             std::vector<app::Option> o;
+            std::string newer = updater::available();
+            o.push_back({newer.empty() ? "Check for updates" : "Update to " + newer, []() { app::push(updater::open()); },
+                std::string("This is PKForge 3DS ") + PORT_VERSION + ". New versions come from GitHub and install here."});
             o.push_back({"Sound", []() { screens::soundMenu(); }, "Music and sound effects, on or off."});
             o.push_back({std::string("Color theme: ") + themeName(theme()), []()
                 {
@@ -666,6 +677,7 @@ namespace
                 SaveRef ref = list[focus];
                 o.push_back({"Delete this save file", [this, ref]() { askDelete(ref); }, "Also SELECT on its card."});
             }
+            o.push_back({"Quick guide", []() { app::push(guide::open()); }, "The basics in a few pages."});
             o.push_back({"About", []() { app::push(screens::about()); }});
             o.push_back({"Exit PKForge", []() { app::quit(); }});
             o.push_back({"Close", []() {}});

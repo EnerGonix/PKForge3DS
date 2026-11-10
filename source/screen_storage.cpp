@@ -1431,6 +1431,7 @@ namespace
             std::vector<app::Option> o;
             if (save)
             {
+                o.push_back({"Search this save", [this]() { searchSave(); }, "Every Pokémon in the party and the boxes by name; picks open its box."});
                 o.push_back({"Bag", [this]() { if (!hardcoreBlocks()) app::push(screens::bag(save)); }});
                 o.push_back({"Trainer card", [this]() { if (!hardcoreBlocks()) app::push(screens::trainer(save)); }});
                 o.push_back({"Write save", [this]() { writeSave(); }, "", save->dirty});
@@ -3108,6 +3109,72 @@ namespace
         }
 
         // The Bank's Search: every Pokémon it holds by name; the chosen one's box opens with it pointed.
+        // The save's Search, as the Bank's: every Pokémon of the party and the boxes by name, species and
+        // nickname; the chosen one's box opens with the cursor on it.
+        void searchSave()
+        {
+            std::vector<screens::PickItem> items;
+            auto add = [&](const Spot& s, int id)
+            {
+                auto pk = read(s);
+                if (!pk)
+                {
+                    return;
+                }
+                std::string name = pk->egg() ? "Egg" : pkdata::species(u16(pk->species()));
+                if (!pk->egg() && files::lower(pk->nickname()) != files::lower(name))
+                {
+                    name += "  (" + pk->nickname() + ")";
+                }
+                if (pk->shiny())
+                {
+                    name += "  *";
+                }
+                char where[48];
+                if (s.party)
+                {
+                    snprintf(where, sizeof(where), "Lv.%d  -  Party %d", pk->level(), s.slot + 1);
+                }
+                else
+                {
+                    snprintf(where, sizeof(where), "Lv.%d  -  %s slot %02d", pk->level(), boxLabel(Side::Save, s.box).c_str(), s.slot + 1);
+                }
+                items.push_back({id, name, where});
+            };
+            for (int s = 0; s < partyCount(); s++)
+            {
+                add(Spot{Side::Save, 0, s, true}, 100000 + s);
+            }
+            for (int b = 0; b < sav()->maxBoxes(); b++)
+            {
+                for (int s = 0; s < boxSlots(); s++)
+                {
+                    add(Spot{Side::Save, b, s, false}, b * 1000 + s);
+                }
+            }
+            if (items.empty())
+            {
+                app::message("Search", "This save has no Pokémon yet.");
+                return;
+            }
+            char title[48];
+            snprintf(title, sizeof(title), "Search the save (%d)", int(items.size()));
+            app::push(screens::picker(title, std::move(items), -1, [this](int id)
+                {
+                    if (side != Side::Save)
+                    {
+                        switchSide();
+                    }
+                    party = id >= 100000;
+                    if (!party)
+                    {
+                        saveBox = id / 1000;
+                    }
+                    cursor = party ? id - 100000 : id % 1000;
+                    refresh();
+                }));
+        }
+
         void searchBank()
         {
             std::vector<screens::PickItem> items;

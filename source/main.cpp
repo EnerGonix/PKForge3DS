@@ -9,6 +9,8 @@
 #include "r4link.hpp"
 #include "saves.hpp"
 #include "screens.hpp"
+#include "guide.hpp"
+#include "updater.hpp"
 
 #include "utils/i18n.hpp"
 #include <3ds.h>
@@ -140,7 +142,12 @@ int main()
     else
     {
         app::push(screens::home());
+        if (!guide::seen())
+        {
+            app::push(guide::open()); // the first start: the quick guide comes after the title screen
+        }
         app::push(screens::title([]() { loadFinish(); }));
+        updater::checkInBackground(); // once a day, quietly
     }
 
     total.reset();

@@ -15,7 +15,9 @@ fi
 # The HOME menu art: icon.png (for the SMDH), the banner image and sound.
 /usr/bin/python3 -I tools/ctr/make_art.py .
 # The title screen's logo (PKForge's own, docs/images/logo-transparent.png), at full size.
-mkdir -p romfs/gfx
+mkdir -p romfs/gfx romfs/certs
+# The root certificates GitHub chains to, for the in-app updater's verified HTTPS.
+cp certs/*.der romfs/certs/
 tex3ds tools/ctr/title-logo.png -f rgba8 -z auto -o romfs/gfx/title.t3x
 # R4 PokéLink rides inside the RomFS; PKForge puts it on the SD card before starting it.
 make -C r4pokelink
