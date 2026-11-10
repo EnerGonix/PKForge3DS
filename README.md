@@ -135,8 +135,13 @@ Install `PKForge.cia` with FBI; PKForge gets its own icon on the HOME menu (titl
 To update, install the new CIA over it: everything PKForge keeps is in `sdmc:/3ds/PKForge`, which stays.
 
 `build.sh` makes the CIA with `tools/ctr/cia.sh` (makerom from Project_CTR, bannertool from
-Epicpkmn11). `PKForge.3dsx` is still built, for the tests in Azahar; `tools/run-autotest.ps1` can also
-run `build/cia/PKForge.cxi`, the app the CIA carries.
+Epicpkmn11). `PKForge.3dsx` is still built, for the tests in Azahar (`tools/run-autotest.ps1`).
+
+The HOME Menu banner is a 3D model the HOME Menu turns and shows in stereoscopic 3D: PKForge's logo with
+its cyan lines in relief and a plain blue back. `tools/ctr/make_banner3d.py` writes it as glTF and
+[pycgfx](https://github.com/skyfloogle/pycgfx) (by skyfloogle) converts it to `tools/ctr/banner.cgfx`, which
+the build uses as it is; the banner sound (a device clacking open, then a ball opening) is synthesized by
+`tools/ctr/make_art.py`. Both are original.
 
 ## Build
 
