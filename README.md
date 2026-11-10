@@ -8,6 +8,20 @@ from) for reading and writing saves.
 
 It opens on a title screen (PKForge's logo over the Android splash colour; touch or A to go on).
 
+## 📲 Download straight to your 3DS
+
+<img src="docs/assets/download-qr.png" alt="QR code: latest PKForge.cia" width="240" align="right">
+
+Scan the QR code on the 3DS and it installs the newest `PKForge.cia`, no PC needed:
+
+- **FBI**: Remote Install › Scan QR Code
+- **3dsDL** (or any QR CIA installer): scan it the same way
+
+It always points to the latest release:
+`https://github.com/EnerGonix/PKForge3DS/releases/latest/download/PKForge.cia`
+
+<br clear="right">
+
 ## ⭐ R4 PokéLink: the saves on your R4 card, edited on the 3DS
 
 New in this port. If you play DS, GBA or Game Boy Pokémon games on an **R4 (Ace3DS) flashcart**, their
