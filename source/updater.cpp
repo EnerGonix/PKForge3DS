@@ -129,11 +129,17 @@ namespace updater
 
         // ---------------------------------------------------------------- versions and the release
 
-        // "v1.2.3" or "1.2.3" as {1, 2, 3}.
+        // "3ds-v1.2.3", "v1.2.3" or "1.2.3" as {1, 2, 3}. The port's tags carry "3ds-" because the fork also
+        // has the Android PKForge's own v1.x-v3.x tags.
         void parseVersion(const std::string& s, int v[3])
         {
             v[0] = v[1] = v[2] = 0;
-            sscanf(s.c_str() + (!s.empty() && (s[0] == 'v' || s[0] == 'V')), "%d.%d.%d", &v[0], &v[1], &v[2]);
+            size_t at = s.compare(0, 4, "3ds-") == 0 ? 4 : 0;
+            if (at < s.size() && (s[at] == 'v' || s[at] == 'V'))
+            {
+                at++;
+            }
+            sscanf(s.c_str() + at, "%d.%d.%d", &v[0], &v[1], &v[2]);
         }
 
         bool newer(const std::string& tag)
