@@ -1,8 +1,9 @@
 """The HOME Menu 3D banner: PKForge's logo (tools/ctr/title-logo.png) as a solid object with relief.
 
 The logo's dark body becomes a thick slab and its cyan lines (the handheld's edge, screen and button) stand
-out of it as ridges, on the front and the back, so it has real depth from every angle and in stereoscopic
-3D. Every surface takes its colour from the logo (one texture, UVs from the logo's pixels). No
+out of its front as ridges, so it has real depth from every angle and in stereoscopic 3D. The front and
+the sides take their colour from the logo (one texture, UVs from the logo's pixels); the back is one flat,
+plain PKForge-blue surface, like the back of a console. No
 transparency, no animation: the HOME Menu itself turns the model. Writes a glTF scene
 COMMON > world > logo for pycgfx (https://github.com/skyfloogle/pycgfx), which makes the CGFX:
 
@@ -30,6 +31,8 @@ HEIGHT = 16.0                     # model height in banner units
 BODY = 3.2                        # the slab's thickness
 RIDGE = 1.1                       # how far the cyan lines stand out of each face
 CENTER_Y = 1.0                    # the camera's height
+BACK = (0x27 / 255, 0x89 / 255, 0xCD / 255, 1.0)   # PKForge's blue (theme "Blue"), the plain back
+ZB = -BODY / 2                    # the flat back
 
 scale = HEIGHT / H
 cols, rows = (W + CELL - 1) // CELL, (H + CELL - 1) // CELL
@@ -68,14 +71,17 @@ def pos(x, y, z):
 
 
 mesh = {'p': [], 'n': [], 'uv': [], 'i': []}
+back = {'p': [], 'n': [], 'i': []}
 
 
-def quad(corners, normal, uvs):
-    base = len(mesh['p'])
-    mesh['p'] += corners
-    mesh['n'] += [normal] * 4
-    mesh['uv'] += uvs
-    mesh['i'] += [base, base + 1, base + 2, base, base + 2, base + 3]
+def quad(corners, normal, uvs, into=None):
+    m = mesh if into is None else into
+    base = len(m['p'])
+    m['p'] += corners
+    m['n'] += [normal] * 4
+    if uvs is not None:
+        m['uv'] += uvs
+    m['i'] += [base, base + 1, base + 2, base, base + 2, base + 3]
 
 
 # Front and back faces: runs of cells with the same height in each row.
@@ -94,16 +100,27 @@ for cy in range(rows):
         u0, u1, v0, v1 = x0 / W, x1 / W, y0 / H, y1 / H
         quad([pos(x0, y1, h), pos(x1, y1, h), pos(x1, y0, h), pos(x0, y0, h)], (0, 0, 1),
              [(u0, v1), (u1, v1), (u1, v0), (u0, v0)])
-        # The back reads right from behind (mirrored UVs).
-        quad([pos(x1, y1, -h), pos(x0, y1, -h), pos(x0, y0, -h), pos(x1, y0, -h)], (0, 0, -1),
-             [(1 - u1, v1), (1 - u0, v1), (1 - u0, v0), (1 - u1, v0)])
+
+# The back: one flat plain-blue surface over every filled cell (row runs).
+for cy in range(rows):
+    cx = 0
+    while cx < cols:
+        if half(cx, cy) == 0:
+            cx += 1
+            continue
+        start = cx
+        while cx < cols and half(cx, cy) > 0:
+            cx += 1
+        x0, x1 = start * CELL, min(W, cx * CELL)
+        y0, y1 = cy * CELL, min(H, cy * CELL + CELL)
+        quad([pos(x1, y1, ZB), pos(x0, y1, ZB), pos(x0, y0, ZB), pos(x1, y0, ZB)], (0, 0, -1), None, back)
 
 
 def walls(ha, hb):
     """The z ranges of wall between a cell of half-thickness ha and its neighbour hb (< ha)."""
     if hb == 0:
-        return [(-ha, ha)]
-    return [(hb, ha), (-ha, -hb)]
+        return [(ZB, ha)]
+    return [(hb, ha)]
 
 
 # Walls across rows (top/bottom edges): runs along x with the same pair of heights.
@@ -169,19 +186,22 @@ def add(data, fmt, count, kind_, target, minmax=None):
     return len(accessors) - 1
 
 
-p = mesh['p']
-assert len(p) < 65536
-mins = [min(v[i] for v in p) for i in range(3)]
-maxs = [max(v[i] for v in p) for i in range(3)]
-prim = {
-    'attributes': {
+def primitive(m, material):
+    p = m['p']
+    assert len(p) < 65536
+    mins = [min(v[i] for v in p) for i in range(3)]
+    maxs = [max(v[i] for v in p) for i in range(3)]
+    attrs = {
         'POSITION': add(b''.join(struct.pack('<3f', *v) for v in p), 5126, len(p), 'VEC3', 34962, (mins, maxs)),
-        'NORMAL': add(b''.join(struct.pack('<3f', *v) for v in mesh['n']), 5126, len(p), 'VEC3', 34962),
-        'TEXCOORD_0': add(b''.join(struct.pack('<2f', *v) for v in mesh['uv']), 5126, len(p), 'VEC2', 34962),
-    },
-    'indices': add(b''.join(struct.pack('<H', i) for i in mesh['i']), 5123, len(mesh['i']), 'SCALAR', 34963),
-    'material': 0,
-}
+        'NORMAL': add(b''.join(struct.pack('<3f', *v) for v in m['n']), 5126, len(p), 'VEC3', 34962),
+    }
+    if m.get('uv'):
+        attrs['TEXCOORD_0'] = add(b''.join(struct.pack('<2f', *v) for v in m['uv']), 5126, len(p), 'VEC2', 34962)
+    return {'attributes': attrs, 'material': material,
+            'indices': add(b''.join(struct.pack('<H', i) for i in m['i']), 5123, len(m['i']), 'SCALAR', 34963)}
+
+
+prims = [primitive(mesh, 0), primitive(back, 1)]
 gltf = {
     'asset': {'version': '2.0', 'generator': 'PKForge3DS tools/ctr/make_banner3d.py'},
     'scene': 0,
@@ -191,9 +211,10 @@ gltf = {
         {'name': 'world', 'children': [2]},
         {'name': 'logo', 'mesh': 0},
     ],
-    'meshes': [{'name': 'logo', 'primitives': [prim]}],
+    'meshes': [{'name': 'logo', 'primitives': prims}],
     'materials': [
         {'name': 'logo', 'pbrMetallicRoughness': {'baseColorTexture': {'index': 0}, 'metallicFactor': 0, 'roughnessFactor': 1}},
+        {'name': 'back', 'pbrMetallicRoughness': {'baseColorFactor': list(BACK), 'metallicFactor': 0, 'roughnessFactor': 1}},
     ],
     'textures': [{'source': 0, 'sampler': 0}],
     'samplers': [{'magFilter': 9729, 'minFilter': 9729, 'wrapS': 33071, 'wrapT': 33071}],
@@ -205,4 +226,4 @@ gltf = {
 open(os.path.join(OUT, 'banner3d.bin'), 'wb').write(blob)
 json.dump(gltf, open(os.path.join(OUT, 'banner3d.gltf'), 'w'), indent=1)
 ridges = sum(row.count(2) for row in kind)
-print(f'{cols}x{rows} cells ({ridges} ridge), {len(mesh["i"]) // 3} triangles, {len(p)} vertices, {len(blob)} bytes')
+print(f'{cols}x{rows} cells ({ridges} ridge), {(len(mesh["i"]) + len(back["i"])) // 3} triangles, {len(blob)} bytes')
