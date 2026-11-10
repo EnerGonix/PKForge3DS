@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """HOME menu art for PKForge: its logo (tools/ctr/icon-flat.png) raised into a tile with depth for the
 48x48 icon and the 256x128 banner, and the banner sound: tools/ctr/banner-sound.wav when present,
-else an original sound of a ball opening (no game audio). Usage: make_art.py <project dir>
+else an original sound of a device flipping open and a ball opening (no game audio). Usage: make_art.py <project dir>
 Writes icon.png (used for the SMDH) and build/cia/banner.png + banner.wav (used by cia.sh)."""
 import shutil
 import math
@@ -137,11 +137,12 @@ def navy_glow(w, h, gx, gy, spread):
 
 
 # ---------------------------------------------------------------- the jingle (original)
-# A ball opening (original, not the games' sound): a button click, the latch popping, air rushing out and
-# a burst of sparkling light settling on a soft chord, with a light echo. Stereo, 44.1 kHz, 16-bit, under 3 seconds: what the HOME Menu plays for a banner.
+# A device flipping open (original, not the games' sounds): clackety hinge clicks, a little motor and a
+# power-on beep; then a ball opening: a button click, the latch popping, air rushing out and a burst of
+# sparkling light settling on a soft chord, with a light echo. Stereo, 44.1 kHz, 16-bit, under 3 seconds: what the HOME Menu plays for a banner.
 
 RATE = 44100
-LENGTH = 2.2
+LENGTH = 2.95
 
 
 def hz(semis):
@@ -223,24 +224,53 @@ def whoosh(volume, length=0.55):
     return out
 
 
+def motor(volume, length=0.16):
+    """A small motor spinning up: a buzzy tone rising, softened by a low-pass."""
+    out, phase, lp = [], 0.0, 0.0
+    n = int(length * RATE)
+    for i in range(n):
+        x = i / n
+        phase += (180 + 420 * x) / RATE
+        saw = 2 * (phase % 1.0) - 1
+        lp += (saw - lp) * 0.08
+        out.append(lp * volume * math.sin(math.pi * x) ** 0.7)
+    return out
+
+
+def beep(freq, volume, length=0.06):
+    """A clean electronic beep with soft edges."""
+    n = int(length * RATE)
+    return [math.sin(2 * math.pi * freq * i / RATE) * volume * min(1.0, i / 60, (n - i) / 200) for i in range(n)]
+
+
 def jingle():
     n = int(LENGTH * RATE)
     left, right = [0.0] * n, [0.0] * n
-    # The button pressed, then the latch: two clicks and a pop.
-    add(left, right, 0.00, click(0.55, 0.55, seed=11), -0.1)
-    add(left, right, 0.07, click(0.45, 0.35, seed=23), 0.1)
-    add(left, right, 0.10, pop(0.7))
+    # The device flips open: clackety clicks speeding up (the hinge and the lid), a little motor, the lid
+    # landing, then a two-note power-on beep.
+    for k, at in enumerate((0.00, 0.075, 0.135, 0.18, 0.215)):
+        add(left, right, at, click(0.5 - k * 0.04, 0.45 + k * 0.05, length=0.014, seed=31 + k), (-0.5, 0.4, -0.3, 0.2, 0.0)[k])
+    add(left, right, 0.22, motor(0.32))
+    add(left, right, 0.38, click(0.6, 0.3, length=0.025, seed=77))
+    add(left, right, 0.38, pop(0.35))
+    add(left, right, 0.47, beep(1568, 0.22))
+    add(left, right, 0.54, beep(2093, 0.22, 0.09))
+    # Then the ball: the button pressed, the latch giving way (two clicks and a pop).
+    b = 0.75
+    add(left, right, b + 0.00, click(0.55, 0.55, seed=11), -0.1)
+    add(left, right, b + 0.07, click(0.45, 0.35, seed=23), 0.1)
+    add(left, right, b + 0.10, pop(0.7))
     # The ball opening: air rushing out, left to right.
-    add(left, right, 0.11, whoosh(0.5), -0.3)
-    add(left, right, 0.16, whoosh(0.35), 0.3)
+    add(left, right, b + 0.11, whoosh(0.5), -0.3)
+    add(left, right, b + 0.16, whoosh(0.35), 0.3)
     # The light coming out: a rising burst of sparkles all around, then a soft glowing chord.
     sparkle = Noise(4242)
     for k in range(18):
-        at = 0.32 + k * 0.045 + (sparkle() + 1) * 0.012
+        at = b + 0.32 + k * 0.045 + (sparkle() + 1) * 0.012
         semis = 22 + int((sparkle() + 1) * 9) + k // 3
         strike(left, right, at, hz(semis), 0.09, 0.22, [(1, 1.0), (2.0, 0.2)], sparkle() * 0.8)
     for semis, pan in ((10, -0.4), (14, 0.0), (17, 0.4), (22, 0.0)):
-        strike(left, right, 0.40, hz(semis), 0.11, 0.8, BELL, pan)
+        strike(left, right, b + 0.40, hz(semis), 0.11, 0.8, BELL, pan)
     # A light echo, crossing sides.
     delay = int(0.15 * RATE)
     for i in range(delay, n):
