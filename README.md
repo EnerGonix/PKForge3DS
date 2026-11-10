@@ -178,6 +178,9 @@ independently (section and Pokémon checksums).
 - QR codes: [QR Code generator](https://github.com/nayuki/QR-Code-generator) by Project Nayuki (MIT),
   [quirc](https://github.com/dlbeer/quirc) by Daniel Beer (ISC), and
   [stb_image](https://github.com/nothings/stb) by Sean Barrett (public domain), in `external/`.
+- Updates download with [curl](https://curl.se) (curl licence, Copyright Daniel Stenberg and contributors),
+  [Mbed TLS](https://github.com/Mbed-TLS/mbedtls) (Apache-2.0) and [zlib](https://zlib.net) (zlib licence),
+  the devkitPro portlibs builds; their licence texts ship in the app's `romfs/licenses`.
 - DS cartridge saves over SPI: `source/spi.cpp` / `spi.hpp` from Checkpoint (Bernardo Giordano,
   FlagBrew) and TWLSaveTool (TuxSH), GPLv3 with Additional Terms 7.b and 7.c, marked as modified
   (logging removed).
