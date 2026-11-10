@@ -10,7 +10,7 @@ It opens on a title screen (PKForge's logo over the Android splash colour; touch
 
 ## 📲 Download straight to your 3DS
 
-<img src="docs/assets/download-qr.png" alt="QR code: latest PKForge.cia" width="240" align="right">
+<img src="docs/assets/download-qr.png" alt="QR code: latest PKForge.cia" width="320" align="right">
 
 Scan the QR code on the 3DS and it installs the newest `PKForge.cia`, no PC needed:
 
