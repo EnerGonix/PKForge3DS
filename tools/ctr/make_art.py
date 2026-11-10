@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """HOME menu art for PKForge: its logo (tools/ctr/icon-flat.png) raised into a tile with depth for the
 48x48 icon and the 256x128 banner, and the banner sound: tools/ctr/banner-sound.wav when present,
-else an original jingle (an anvil strike and bells; no game music). Usage: make_art.py <project dir>
+else an original sound of a ball opening (no game audio). Usage: make_art.py <project dir>
 Writes icon.png (used for the SMDH) and build/cia/banner.png + banner.wav (used by cia.sh)."""
 import shutil
 import math
@@ -137,11 +137,11 @@ def navy_glow(w, h, gx, gy, spread):
 
 
 # ---------------------------------------------------------------- the jingle (original)
-# A soft anvil strike (the forge), then a bright bell arpeggio rising into a chord, a sparkle on top and a
-# light echo. Stereo, 44.1 kHz, 16-bit, under 3 seconds: what the HOME Menu plays for a banner.
+# A ball opening (original, not the games' sound): a button click, the latch popping, air rushing out and
+# a burst of sparkling light settling on a soft chord, with a light echo. Stereo, 44.1 kHz, 16-bit, under 3 seconds: what the HOME Menu plays for a banner.
 
 RATE = 44100
-LENGTH = 2.6
+LENGTH = 2.2
 
 
 def hz(semis):
@@ -165,29 +165,87 @@ def strike(left, right, at, freq, volume, decay, partials, pan=0.0):
 
 
 BELL = [(1, 1.0), (2.0, 0.35), (3.0, 0.12), (4.2, 0.05)]
-ANVIL = [(1, 1.0), (2.76, 0.5), (5.4, 0.25), (8.9, 0.1)]  # inharmonic: metal, not a note
+
+
+class Noise:
+    """Repeatable white noise (a fixed seed: the same sound on every build)."""
+
+    def __init__(self, seed):
+        self.seed = seed
+
+    def __call__(self):
+        self.seed = (self.seed * 1103515245 + 12345) & 0x7FFFFFFF
+        return (self.seed >> 15) / 32768.0 - 1
+
+
+def add(left, right, at, samples, pan=0.0):
+    start = int(at * RATE)
+    gl, gr = (1 - pan) / 2 ** 0.5, (1 + pan) / 2 ** 0.5
+    for i, v in enumerate(samples):
+        if start + i < len(left):
+            left[start + i] += v * gl
+            right[start + i] += v * gr
+
+
+def click(volume, bright, length=0.018, seed=7):
+    """A short mechanical tick: a noise burst through a fast decay, with a small pitched knock."""
+    noise, out, lp = Noise(seed), [], 0.0
+    for i in range(int(length * RATE)):
+        t = i / RATE
+        lp += (noise() - lp) * bright
+        knock = math.sin(2 * math.pi * 1900 * t) * 0.6
+        out.append((lp * 1.6 + knock) * volume * math.exp(-t / (length / 4)))
+    return out
+
+
+def pop(volume):
+    """The latch giving way: a quick low thump falling in pitch."""
+    out, phase = [], 0.0
+    for i in range(int(0.12 * RATE)):
+        t = i / RATE
+        f = 70 + 260 * math.exp(-t / 0.018)
+        phase += f / RATE
+        out.append(math.sin(2 * math.pi * phase) * volume * math.exp(-t / 0.04) * min(1.0, i / 30))
+    return out
+
+
+def whoosh(volume, length=0.55):
+    """Air rushing out: noise through a low-pass opening up, swelling and fading, with a rising tone."""
+    noise, out, lp, phase = Noise(99), [], 0.0, 0.0
+    n = int(length * RATE)
+    for i in range(n):
+        x = i / n
+        cutoff = 0.02 + 0.35 * x ** 1.5
+        lp += (noise() - lp) * cutoff
+        phase += (500 + 1500 * x ** 2) / RATE
+        env = math.sin(math.pi * min(1.0, x * 1.15)) ** 1.5
+        out.append((lp * 1.4 + 0.18 * math.sin(2 * math.pi * phase)) * volume * env)
+    return out
 
 
 def jingle():
     n = int(LENGTH * RATE)
     left, right = [0.0] * n, [0.0] * n
-    # The forge: a soft anvil ting, and a warm low note under it.
-    strike(left, right, 0.00, hz(-2) * 2, 0.32, 0.35, ANVIL, -0.2)
-    strike(left, right, 0.00, hz(-26), 0.30, 0.9, [(1, 1.0), (2, 0.2)])
-    # The bells: G major rising (G5 B5 D6 G6), then the chord rings with a sparkle.
-    for i, (at, semis) in enumerate([(0.30, 10), (0.40, 14), (0.50, 17), (0.62, 22)]):
-        strike(left, right, at, hz(semis), 0.26, 0.55, BELL, (-0.5, 0.5, -0.3, 0.3)[i])
-    for semis, pan in ((10, -0.4), (14, 0.0), (17, 0.4)):
-        strike(left, right, 0.80, hz(semis), 0.16, 0.9, BELL, pan)
-    strike(left, right, 0.80, hz(-14), 0.22, 1.0, [(1, 1.0), (2, 0.25)])
-    for at, semis, pan in ((0.95, 34, 0.6), (1.03, 38, -0.6), (1.11, 41, 0.5)):
-        strike(left, right, at, hz(semis), 0.07, 0.25, [(1, 1.0)], pan)
+    # The button pressed, then the latch: two clicks and a pop.
+    add(left, right, 0.00, click(0.55, 0.55, seed=11), -0.1)
+    add(left, right, 0.07, click(0.45, 0.35, seed=23), 0.1)
+    add(left, right, 0.10, pop(0.7))
+    # The ball opening: air rushing out, left to right.
+    add(left, right, 0.11, whoosh(0.5), -0.3)
+    add(left, right, 0.16, whoosh(0.35), 0.3)
+    # The light coming out: a rising burst of sparkles all around, then a soft glowing chord.
+    sparkle = Noise(4242)
+    for k in range(18):
+        at = 0.32 + k * 0.045 + (sparkle() + 1) * 0.012
+        semis = 22 + int((sparkle() + 1) * 9) + k // 3
+        strike(left, right, at, hz(semis), 0.09, 0.22, [(1, 1.0), (2.0, 0.2)], sparkle() * 0.8)
+    for semis, pan in ((10, -0.4), (14, 0.0), (17, 0.4), (22, 0.0)):
+        strike(left, right, 0.40, hz(semis), 0.11, 0.8, BELL, pan)
     # A light echo, crossing sides.
-    delay = int(0.19 * RATE)
+    delay = int(0.15 * RATE)
     for i in range(delay, n):
-        left[i] += right[i - delay] * 0.28
-        right[i] += left[i - delay] * 0.28
-    # Fade the tail and leave headroom.
+        left[i] += right[i - delay] * 0.25
+        right[i] += left[i - delay] * 0.25
     fade = int(0.5 * RATE)
     for i in range(n - fade, n):
         k = (n - i) / fade
