@@ -1,4 +1,25 @@
-# PKForge for Nintendo 3DS
+<p align="center">
+  <img src="docs/assets/banner.png" alt="PKForge for Nintendo 3DS" width="256">
+</p>
+
+<h1 align="center">PKForge for Nintendo 3DS</h1>
+
+<p align="center">
+  <a href="https://github.com/EnerGonix/PKForge3DS/releases/latest"><img src="https://img.shields.io/github/v/release/EnerGonix/PKForge3DS?label=release" alt="Latest release"></a>
+  <a href="https://github.com/EnerGonix/PKForge3DS/releases"><img src="https://img.shields.io/github/downloads/EnerGonix/PKForge3DS/total" alt="Downloads"></a>
+  <img src="https://img.shields.io/badge/platform-Nintendo%203DS-red" alt="Platform: Nintendo 3DS">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPLv3-blue" alt="License: GPLv3"></a>
+</p>
+
+<p align="center">
+  <a href="#-download-straight-to-your-3ds">Download</a> ·
+  <a href="#-r4-pokélink-the-saves-on-your-r4-card-edited-on-the-3ds">R4 PokéLink</a> ·
+  <a href="#screenshots">Screenshots</a> ·
+  <a href="#what-it-does">Features</a> ·
+  <a href="CHANGELOG.md">Changelog</a> ·
+  <a href="#build">Build</a> ·
+  <a href="#credits-and-licences">Credits</a>
+</p>
 
 A native 3DS homebrew port of [PKForge](https://github.com/sofianeelhor/PKForge), the Pokémon save
 editor and Bank for Android. PKForge itself is C# on .NET MAUI and PKHeX.Core, which cannot run on a
