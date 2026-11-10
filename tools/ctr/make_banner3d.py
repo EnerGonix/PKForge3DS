@@ -1,8 +1,9 @@
-"""The HOME Menu 3D banner: PKForge's logo (tools/ctr/title-logo.png) made into a thick, solid object.
+"""The HOME Menu 3D banner: PKForge's logo (tools/ctr/title-logo.png) as a solid object with relief.
 
-The front and back follow the logo's outline (cells of its alpha mask, merged in row runs) and carry the
-logo as a texture; side walls in PKForge blue give it its thickness. No transparency, no animation: the
-HOME Menu itself turns the model and shows it in stereoscopic 3D. Writes a glTF scene
+The logo's dark body becomes a thick slab and its cyan lines (the handheld's edge, screen and button) stand
+out of it as ridges, on the front and the back, so it has real depth from every angle and in stereoscopic
+3D. Every surface takes its colour from the logo (one texture, UVs from the logo's pixels). No
+transparency, no animation: the HOME Menu itself turns the model. Writes a glTF scene
 COMMON > world > logo for pycgfx (https://github.com/skyfloogle/pycgfx), which makes the CGFX:
 
     python make_banner3d.py <out dir>
@@ -24,102 +25,128 @@ os.makedirs(OUT, exist_ok=True)
 
 logo = Image.open(os.path.join(HERE, 'title-logo.png')).convert('RGBA')
 W, H = logo.size                  # 200 x 238
-CELL = 3                          # mask cell, in logo pixels
-HEIGHT = 15.0                     # model height in banner units
-DEPTH = 1.8                       # thickness
+CELL = 3                          # cell size, in logo pixels
+HEIGHT = 16.0                     # model height in banner units
+BODY = 3.2                        # the slab's thickness
+RIDGE = 1.1                       # how far the cyan lines stand out of each face
 CENTER_Y = 1.0                    # the camera's height
-SIDE = (0x27 / 255, 0x89 / 255, 0xCD / 255, 1.0)   # PKForge's blue (theme "Blue")
 
 scale = HEIGHT / H
 cols, rows = (W + CELL - 1) // CELL, (H + CELL - 1) // CELL
-alpha = logo.getchannel('A').load()
+px = logo.load()
 
 
-def filled(cx, cy):
-    if cx < 0 or cy < 0 or cx >= cols or cy >= rows:
-        return False
-    total = n = 0
+def classify(cx, cy):
+    """0 = empty, 1 = body, 2 = ridge (cyan line)."""
+    n = solid = cyan = 0
     for y in range(cy * CELL, min(H, cy * CELL + CELL)):
         for x in range(cx * CELL, min(W, cx * CELL + CELL)):
-            total += alpha[x, y]
+            r, g, b, a = px[x, y]
             n += 1
-    return total / n >= 128
+            if a >= 128:
+                solid += 1
+                if b >= 150 and g >= 90:
+                    cyan += 1
+    if solid * 2 < n:
+        return 0
+    return 2 if cyan * 5 >= solid * 2 else 1
 
 
-grid = [[filled(cx, cy) for cx in range(cols)] for cy in range(rows)]
+kind = [[classify(cx, cy) for cx in range(cols)] for cy in range(rows)]
 
 
-def pos(px, py, z):
+def half(cx, cy):
+    """Half the thickness at a cell (0 outside the logo)."""
+    if cx < 0 or cy < 0 or cx >= cols or cy >= rows or kind[cy][cx] == 0:
+        return 0.0
+    return BODY / 2 + (RIDGE if kind[cy][cx] == 2 else 0)
+
+
+def pos(x, y, z):
     """Logo pixel coordinates (y down) to banner units (y up), centred."""
-    return ((px - W / 2) * scale, (H / 2 - py) * scale + CENTER_Y, z)
+    return ((x - W / 2) * scale, (H / 2 - y) * scale + CENTER_Y, z)
 
 
-front, walls = {'p': [], 'n': [], 'uv': [], 'i': []}, {'p': [], 'n': [], 'i': []}
+mesh = {'p': [], 'n': [], 'uv': [], 'i': []}
 
 
-def quad(mesh, corners, normal, uvs=None):
+def quad(corners, normal, uvs):
     base = len(mesh['p'])
     mesh['p'] += corners
     mesh['n'] += [normal] * 4
-    if uvs is not None:
-        mesh['uv'] += uvs
+    mesh['uv'] += uvs
     mesh['i'] += [base, base + 1, base + 2, base, base + 2, base + 3]
 
 
-zf, zb = DEPTH / 2, -DEPTH / 2
+# Front and back faces: runs of cells with the same height in each row.
 for cy in range(rows):
     cx = 0
     while cx < cols:
-        if not grid[cy][cx]:
+        h = half(cx, cy)
+        if h == 0:
             cx += 1
             continue
         start = cx
-        while cx < cols and grid[cy][cx]:
+        while cx < cols and half(cx, cy) == h:
             cx += 1
         x0, x1 = start * CELL, min(W, cx * CELL)
         y0, y1 = cy * CELL, min(H, cy * CELL + CELL)
         u0, u1, v0, v1 = x0 / W, x1 / W, y0 / H, y1 / H
-        # Front (+Z, counter-clockwise seen from the camera) and back (-Z, the logo reads right from behind).
-        quad(front, [pos(x0, y1, zf), pos(x1, y1, zf), pos(x1, y0, zf), pos(x0, y0, zf)], (0, 0, 1),
+        quad([pos(x0, y1, h), pos(x1, y1, h), pos(x1, y0, h), pos(x0, y0, h)], (0, 0, 1),
              [(u0, v1), (u1, v1), (u1, v0), (u0, v0)])
-        quad(front, [pos(x1, y1, zb), pos(x0, y1, zb), pos(x0, y0, zb), pos(x1, y0, zb)], (0, 0, -1),
+        # The back reads right from behind (mirrored UVs).
+        quad([pos(x1, y1, -h), pos(x0, y1, -h), pos(x0, y0, -h), pos(x1, y0, -h)], (0, 0, -1),
              [(1 - u1, v1), (1 - u0, v1), (1 - u0, v0), (1 - u1, v0)])
 
-# Side walls along every edge between a filled cell and an empty one, merged into runs.
+
+def walls(ha, hb):
+    """The z ranges of wall between a cell of half-thickness ha and its neighbour hb (< ha)."""
+    if hb == 0:
+        return [(-ha, ha)]
+    return [(hb, ha), (-ha, -hb)]
+
+
+# Walls across rows (top/bottom edges): runs along x with the same pair of heights.
 for cy in range(rows):
-    for side, dy in (('top', -1), ('bottom', 1)):
+    for dy, normal in ((-1, (0, 1, 0)), (1, (0, -1, 0))):
         cx = 0
         while cx < cols:
-            if not (grid[cy][cx] and not (0 <= cy + dy < rows and grid[cy + dy][cx])):
+            ha, hb = half(cx, cy), half(cx, cy + dy)
+            if ha <= hb:
                 cx += 1
                 continue
             start = cx
-            while cx < cols and grid[cy][cx] and not (0 <= cy + dy < rows and grid[cy + dy][cx]):
+            while cx < cols and (half(cx, cy), half(cx, cy + dy)) == (ha, hb):
                 cx += 1
             x0, x1 = start * CELL, min(W, cx * CELL)
-            y = cy * CELL if side == 'top' else min(H, cy * CELL + CELL)
-            if side == 'top':
-                quad(walls, [pos(x0, y, zf), pos(x1, y, zf), pos(x1, y, zb), pos(x0, y, zb)], (0, 1, 0))
-            else:
-                quad(walls, [pos(x1, y, zf), pos(x0, y, zf), pos(x0, y, zb), pos(x1, y, zb)], (0, -1, 0))
+            y = cy * CELL if dy < 0 else min(H, cy * CELL + CELL)
+            v = (cy * CELL + CELL / 2) / H
+            for z0, z1 in walls(ha, hb):
+                a, b = (x0, x1) if dy < 0 else (x1, x0)
+                quad([pos(a, y, z1), pos(b, y, z1), pos(b, y, z0), pos(a, y, z0)], normal,
+                     [(a / W, v), (b / W, v), (b / W, v), (a / W, v)])
+
+# Walls across columns (left/right edges): runs along y.
 for cx in range(cols):
-    for side, dx in (('left', -1), ('right', 1)):
+    for dx, normal in ((-1, (-1, 0, 0)), (1, (1, 0, 0))):
         cy = 0
         while cy < rows:
-            if not (grid[cy][cx] and not (0 <= cx + dx < cols and grid[cy][cx + dx])):
+            ha, hb = half(cx, cy), half(cx + dx, cy)
+            if ha <= hb:
                 cy += 1
                 continue
             start = cy
-            while cy < rows and grid[cy][cx] and not (0 <= cx + dx < cols and grid[cy][cx + dx]):
+            while cy < rows and (half(cx, cy), half(cx + dx, cy)) == (ha, hb):
                 cy += 1
             y0, y1 = start * CELL, min(H, cy * CELL)
-            x = cx * CELL if side == 'left' else min(W, cx * CELL + CELL)
-            if side == 'left':
-                quad(walls, [pos(x, y0, zf), pos(x, y1, zf), pos(x, y1, zb), pos(x, y0, zb)], (-1, 0, 0))
-            else:
-                quad(walls, [pos(x, y1, zf), pos(x, y0, zf), pos(x, y0, zb), pos(x, y1, zb)], (1, 0, 0))
+            x = cx * CELL if dx < 0 else min(W, cx * CELL + CELL)
+            u = (cx * CELL + CELL / 2) / W
+            for z0, z1 in walls(ha, hb):
+                a, b = (y1, y0) if dx < 0 else (y0, y1)  # counter-clockwise seen from outside
+                quad([pos(x, a, z1), pos(x, b, z1), pos(x, b, z0), pos(x, a, z0)], normal,
+                     [(u, a / H), (u, b / H), (u, b / H), (u, a / H)])
 
-# The texture: the logo on its own dark colour (no alpha needed: only filled cells are drawn), 128 x 128.
+# The texture: the logo on its own dark colour (only filled cells are drawn, so no alpha), 128 x 128.
 flat = Image.new('RGBA', logo.size, (0x14, 0x12, 0x1D, 255))
 flat.alpha_composite(logo)
 flat.convert('RGB').resize((128, 128), Image.LANCZOS).save(os.path.join(OUT, 'logo.png'))
@@ -129,34 +156,32 @@ blob = bytearray()
 views, accessors = [], []
 
 
-def add(data, fmt, count, kind, target, minmax=None):
+def add(data, fmt, count, kind_, target, minmax=None):
     while len(blob) % 4:
         blob.append(0)
     offset = len(blob)
     blob.extend(data)
     views.append({'buffer': 0, 'byteOffset': offset, 'byteLength': len(data), 'target': target})
-    acc = {'bufferView': len(views) - 1, 'componentType': fmt, 'count': count, 'type': kind}
+    acc = {'bufferView': len(views) - 1, 'componentType': fmt, 'count': count, 'type': kind_}
     if minmax:
         acc['min'], acc['max'] = minmax
     accessors.append(acc)
     return len(accessors) - 1
 
 
-def primitive(mesh, material, with_uv):
-    p = mesh['p']
-    mins = [min(v[i] for v in p) for i in range(3)]
-    maxs = [max(v[i] for v in p) for i in range(3)]
-    attrs = {
+p = mesh['p']
+assert len(p) < 65536
+mins = [min(v[i] for v in p) for i in range(3)]
+maxs = [max(v[i] for v in p) for i in range(3)]
+prim = {
+    'attributes': {
         'POSITION': add(b''.join(struct.pack('<3f', *v) for v in p), 5126, len(p), 'VEC3', 34962, (mins, maxs)),
         'NORMAL': add(b''.join(struct.pack('<3f', *v) for v in mesh['n']), 5126, len(p), 'VEC3', 34962),
-    }
-    if with_uv:
-        attrs['TEXCOORD_0'] = add(b''.join(struct.pack('<2f', *v) for v in mesh['uv']), 5126, len(p), 'VEC2', 34962)
-    idx = add(b''.join(struct.pack('<H', i) for i in mesh['i']), 5123, len(mesh['i']), 'SCALAR', 34963)
-    return {'attributes': attrs, 'indices': idx, 'material': material}
-
-
-assert len(front['p']) < 65536 and len(walls['p']) < 65536
+        'TEXCOORD_0': add(b''.join(struct.pack('<2f', *v) for v in mesh['uv']), 5126, len(p), 'VEC2', 34962),
+    },
+    'indices': add(b''.join(struct.pack('<H', i) for i in mesh['i']), 5123, len(mesh['i']), 'SCALAR', 34963),
+    'material': 0,
+}
 gltf = {
     'asset': {'version': '2.0', 'generator': 'PKForge3DS tools/ctr/make_banner3d.py'},
     'scene': 0,
@@ -166,10 +191,9 @@ gltf = {
         {'name': 'world', 'children': [2]},
         {'name': 'logo', 'mesh': 0},
     ],
-    'meshes': [{'name': 'logo', 'primitives': [primitive(front, 0, True), primitive(walls, 1, False)]}],
+    'meshes': [{'name': 'logo', 'primitives': [prim]}],
     'materials': [
-        {'name': 'face', 'pbrMetallicRoughness': {'baseColorTexture': {'index': 0}, 'metallicFactor': 0, 'roughnessFactor': 1}},
-        {'name': 'side', 'pbrMetallicRoughness': {'baseColorFactor': list(SIDE), 'metallicFactor': 0, 'roughnessFactor': 1}},
+        {'name': 'logo', 'pbrMetallicRoughness': {'baseColorTexture': {'index': 0}, 'metallicFactor': 0, 'roughnessFactor': 1}},
     ],
     'textures': [{'source': 0, 'sampler': 0}],
     'samplers': [{'magFilter': 9729, 'minFilter': 9729, 'wrapS': 33071, 'wrapT': 33071}],
@@ -180,4 +204,5 @@ gltf = {
 }
 open(os.path.join(OUT, 'banner3d.bin'), 'wb').write(blob)
 json.dump(gltf, open(os.path.join(OUT, 'banner3d.gltf'), 'w'), indent=1)
-print(f'{cols}x{rows} cells, {len(front["i"]) // 3} face + {len(walls["i"]) // 3} wall triangles, {len(blob)} bytes')
+ridges = sum(row.count(2) for row in kind)
+print(f'{cols}x{rows} cells ({ridges} ridge), {len(mesh["i"]) // 3} triangles, {len(p)} vertices, {len(blob)} bytes')
