@@ -1391,6 +1391,266 @@ namespace world
 
     bool hasEventFlags(const pksm::Sav& sav) { return eventSpace(sav).flags > 0; }
 
+    // ------------------------------------------------------------------ Entralink (the original's
+    // EntralinkEditor, PKHeX SAV_Misc5): levels, the Entree Forest, Pass Powers and Funfest missions.
+    namespace
+    {
+#include "entralink.inc"
+
+        bool isBW(u8 v) { return v == 20 || v == 21; }
+        bool isB2W2(u8 v) { return v == 22 || v == 23; }
+        int entralinkAt(u8 v) { return isBW(v) ? 0x21300 : 0x21200; }
+        int forestAt(u8 v) { return isBW(v) ? 0x22C00 : 0x22A00; }
+
+        // The forest is kept encrypted (PKHeX EntreeForest): the Gen 4/5 LCRNG stream over its first 0x84C bytes,
+        // seeded by the u32 after them. The same call encrypts and decrypts.
+        void forestCrypt(u8* f)
+        {
+            u32 seed = rd32(f + 0x84C);
+            for (int i = 0; i < 0x84C; i += 2)
+            {
+                seed = seed * 0x41C64E6Du + 0x6073u;
+                wr16(f + i, u16(rd16(f + i) ^ (seed >> 16)));
+            }
+        }
+
+        const char* areaName(int i)
+        {
+            static const char* names[] = {"Deepest area", "Area 9", "Area 1", "Area 2", "Area 3", "Area 4", "Area 5",
+                "Area 6", "Area 7", "Area 8"};
+            return names[i];
+        }
+        // Slot -> area index above: 20 deepest, then 3 x 10 for area 9, then 3 x 20 for each of areas 1-8.
+        int slotArea(int i)
+        {
+            if (i < 20)
+            {
+                return 0;
+            }
+            i -= 20;
+            if (i < 30)
+            {
+                return 1;
+            }
+            return 2 + (i - 30) / 60;
+        }
+
+        void entralinkMenu(std::shared_ptr<OpenSave> save);
+
+        void forestMenu(std::shared_ptr<OpenSave> save)
+        {
+            u8 v       = u8(save->sav->version());
+            u8* f      = raw(*save->sav) + forestAt(v);
+            forestCrypt(f);
+            int visitors = 0;
+            for (int i = 0; i < 530; i++)
+            {
+                visitors += (rd32(f + i * 4) & 0x3FF) != 0;
+            }
+            int areas  = (f[0x849] & 7) + 2;
+            bool ninth = f[0x848] == 1;
+            forestCrypt(f);
+            std::vector<app::Option> o;
+            o.push_back({"Who is there", [save]()
+                {
+                    u8* f = raw(*save->sav) + forestAt(u8(save->sav->version()));
+                    forestCrypt(f);
+                    std::vector<screens::PickItem> items;
+                    for (int i = 0; i < 530; i++)
+                    {
+                        u32 r = rd32(f + i * 4);
+                        if (r & 0x3FF)
+                        {
+                            u16 move = u16((r >> 11) & 0x3FF);
+                            items.push_back({i, std::string(areaName(slotArea(i))) + ":  " + pkdata::species(u16(r & 0x3FF)),
+                                move ? "Knows " + pkdata::move(move) : ""});
+                        }
+                    }
+                    forestCrypt(f);
+                    if (items.empty())
+                    {
+                        app::message("Entree Forest", "Nobody is in the forest.");
+                        return;
+                    }
+                    app::push(screens::picker("Entree Forest", std::move(items), -1, [](int) {}));
+                },
+                std::to_string(visitors) + " Pokémon in the forest."});
+            o.push_back({"Fill it with legal Dream World Pokémon", [save]()
+                {
+                    u8 v = u8(save->sav->version());
+                    std::vector<DreamEntry> pool(std::begin(dreamCommon), std::end(dreamCommon));
+                    if (isBW(v))
+                    {
+                        pool.insert(pool.end(), std::begin(dreamBW), std::end(dreamBW));
+                    }
+                    else
+                    {
+                        pool.insert(pool.end(), std::begin(dreamB2W2), std::end(dreamB2W2));
+                    }
+                    u8* f = raw(*save->sav) + forestAt(v);
+                    forestCrypt(f);
+                    for (int i = 0; i < 530; i++)
+                    {
+                        u32 r = rd32(f + i * 4);
+                        if (pool.empty())
+                        {
+                            wr32(f + i * 4, 0);
+                            continue;
+                        }
+                        // As PKHeX: each template is used once.
+                        size_t k        = size_t(rand()) % pool.size();
+                        DreamEntry d    = pool[k];
+                        pool.erase(pool.begin() + long(k));
+                        u8 gender       = d.gender;
+                        if (gender == 255)
+                        {
+                            auto pk = save->sav->emptyPkm();
+                            pk->species(pksm::Species{d.species});
+                            gender = u8(pksm::PKX::genderFromRatio(u32(rand()) ^ (u32(rand()) << 16), pk->genderType()));
+                        }
+                        r = (r & 0xE0000000u) | (d.species & 0x3FFu) | u32(d.move & 0x3FF) << 11 | u32(gender & 3) << 21 |
+                            u32(d.form & 0x3F) << 23;
+                        wr32(f + i * 4, r);
+                    }
+                    f[0x849] = u8((f[0x849] & ~7) | 6);
+                    f[0x848] = 1;
+                    forestCrypt(f);
+                    save->dirty = true;
+                    app::message("Entree Forest", "530 Dream World Pokémon, each from PKHeX's legal templates, and every "
+                                                  "area open. Write the save to keep it.");
+                },
+                "Every slot from the Dream World templates PKHeX accepts; every area open."});
+            o.push_back({"Unlock every area", [save]()
+                {
+                    u8* f = raw(*save->sav) + forestAt(u8(save->sav->version()));
+                    forestCrypt(f);
+                    f[0x849] = u8((f[0x849] & ~7) | 6);
+                    f[0x848] = 1;
+                    forestCrypt(f);
+                    save->dirty = true;
+                    app::message("Entree Forest", "Every area is open. Write the save to keep it.");
+                },
+                std::to_string(std::min(areas, 8)) + " of 8 areas open" + (ninth ? ", and area 9." : ".")});
+            o.push_back({"Clear the forest", [save]()
+                {
+                    app::confirm("Send every Pokémon in the Entree Forest away?", [save]()
+                        {
+                            u8* f = raw(*save->sav) + forestAt(u8(save->sav->version()));
+                            forestCrypt(f);
+                            for (int i = 0; i < 530; i++)
+                            {
+                                wr32(f + i * 4, 0);
+                            }
+                            forestCrypt(f);
+                            save->dirty = true;
+                        },
+                        "Clear", "Cancel");
+                },
+                ""});
+            o.push_back({"Back", [save]() { entralinkMenu(save); }});
+            app::menu("Entree Forest", std::move(o));
+        }
+
+        std::string passPowerName(u8 value)
+        {
+            for (auto& p : passPowers)
+            {
+                if (p.value == value)
+                {
+                    return p.name;
+                }
+            }
+            return "Unknown (" + std::to_string(value) + ")";
+        }
+
+        void entralinkMenu(std::shared_ptr<OpenSave> save)
+        {
+            u8 v    = u8(save->sav->version());
+            u8* e   = raw(*save->sav) + entralinkAt(v);
+            std::vector<app::Option> o;
+            o.push_back({"White Forest level: " + std::to_string(rd16(e + 0x0C)), [save]()
+                {
+                    u8* e = raw(*save->sav) + entralinkAt(u8(save->sav->version()));
+                    int lv = rd16(e + 0x0C);
+                    if (app::numpad("White Forest level", lv, 0, 999))
+                    {
+                        wr16(e + 0x0C, u16(lv));
+                        save->dirty = true;
+                    }
+                    entralinkMenu(save);
+                }});
+            o.push_back({"Black City level: " + std::to_string(rd16(e + 0x0E)), [save]()
+                {
+                    u8* e = raw(*save->sav) + entralinkAt(u8(save->sav->version()));
+                    int lv = rd16(e + 0x0E);
+                    if (app::numpad("Black City level", lv, 0, 999))
+                    {
+                        wr16(e + 0x0E, u16(lv));
+                        save->dirty = true;
+                    }
+                    entralinkMenu(save);
+                }});
+            o.push_back({"Entree Forest", [save]() { forestMenu(save); }, "Who visits, fill it legally, open areas."});
+            if (isB2W2(v))
+            {
+                for (int k = 0; k < 3; k++)
+                {
+                    o.push_back({"Pass Power " + std::to_string(k + 1) + ": " + passPowerName(e[0x1A0 + k]), [save, k]()
+                        {
+                            std::vector<screens::PickItem> items;
+                            for (auto& p : passPowers)
+                            {
+                                items.push_back({p.value, p.name, ""});
+                            }
+                            u8* e = raw(*save->sav) + entralinkAt(u8(save->sav->version()));
+                            app::push(screens::picker("Pass Power " + std::to_string(k + 1), std::move(items), e[0x1A0 + k],
+                                [save, k](int value)
+                                {
+                                    raw(*save->sav)[entralinkAt(u8(save->sav->version())) + 0x1A0 + k] = u8(value);
+                                    save->dirty = true;
+                                    entralinkMenu(save);
+                                }));
+                        }});
+                }
+                EventSpace es = eventSpace(*save->sav);
+                int open      = 0;
+                const int n   = int(sizeof(funfestMissions) / sizeof(funfestMissions[0]));
+                for (int i = 1; i < n; i++)
+                {
+                    bool ok = eventFlag(*save->sav, es, 2438);
+                    for (u16 fl : funfestMissions[i].flags)
+                    {
+                        ok = ok && (!fl || eventFlag(*save->sav, es, fl));
+                    }
+                    open += ok;
+                }
+                o.push_back({"Unlock every Funfest mission", [save]()
+                    {
+                        EventSpace es = eventSpace(*save->sav);
+                        eventFlag(*save->sav, es, 2438, true);
+                        const int n = int(sizeof(funfestMissions) / sizeof(funfestMissions[0]));
+                        for (int i = 0; i < n - 1; i++) // as PKHeX: up to the last mission, not including it
+                        {
+                            for (u16 fl : funfestMissions[i].flags)
+                            {
+                                if (fl)
+                                {
+                                    eventFlag(*save->sav, es, fl, true);
+                                }
+                            }
+                        }
+                        save->dirty = true;
+                        app::message("Funfest", "Every Funfest mission is open. Write the save to keep it.");
+                    },
+                    std::to_string(open) + " of " + std::to_string(n - 1) + " missions open."});
+            }
+            o.push_back({"Close", []() {}});
+            app::menu("Entralink", std::move(o));
+        }
+    }
+
+    void entralink(std::shared_ptr<OpenSave> save) { entralinkMenu(save); }
+
     void eventFlags(std::shared_ptr<OpenSave> save)
     {
         EventSpace e = eventSpace(*save->sav);
@@ -1462,6 +1722,10 @@ namespace world
     {
         Game g = gameOf(*save->sav);
         std::vector<app::Option> o;
+        if (isBW(u8(save->sav->version())) || isB2W2(u8(save->sav->version())))
+        {
+            o.push_back({"Entralink", [save]() { entralink(save); }, "Levels, the Entree Forest, Pass Powers, Funfest missions."});
+        }
         if (hasEventFlags(*save->sav))
         {
             o.push_back({"Event flags", [save]() { eventFlags(save); }, "Every flag and work value of the game, PKHeX's names first."});

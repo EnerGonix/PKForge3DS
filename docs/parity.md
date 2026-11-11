@@ -27,7 +27,7 @@ Moon) and GameCube Colosseum/XD; Let's Go and the Switch games are out of scope.
 | Dex Autopilot | autopilot | done |
 | Event flags and work vars (EventFlagsEditor) | World & events > Event flags (Gen 1-7, PKHeX labels via tools/eventlabels.py) | done |
 | Event reset, key item events, roamers, clock, Apricorns, Pokéwalker, honey trees, Poké Beans | world | done |
-| Entralink (Gen 5) | - | **to do** |
+| Entralink (Gen 5) | World & events > Entralink (levels, Entree Forest legal fill, Pass Powers, Funfest; tools/entralink.py) | done |
 | Trainer records, read-only (TrainerRecordsEditor) | START > Trainer records (Gen 6-7, as the original) | done |
 | Trainer card, trainer profiles, Bag, presets | screen_trainer, screen_bag, profiles | done |
 | Restore points (BackupHistoryPage), undo | saves | done |
