@@ -1436,6 +1436,9 @@ namespace
                 o.push_back({"Bag", [this]() { if (!hardcoreBlocks()) app::push(screens::bag(save)); }});
                 o.push_back({"Trainer card", [this]() { if (!hardcoreBlocks()) app::push(screens::trainer(save)); }});
                 o.push_back({"Write save", [this]() { writeSave(); }, "", save->dirty});
+                o.push_back({"Undo changes", [this]() { undoChanges(); },
+                    "Back to the save as it was when opened or last written; Pokémon sent to the Bank go back.",
+                    save->dirty});
                 o.push_back({"Restore points", [this]() { restoreMenu(); },
                     "The save as it was before an earlier write: PKForge keeps the 20 newest."});
                 if (side == Side::Save && !party)
@@ -2913,6 +2916,28 @@ namespace
                                          (skipped ? ", " + std::to_string(skipped) + " skipped" : std::string()) +
                                          (note.empty() ? "" : " (" + note + ")") +
                                          (placed ? ". Write the save to keep them." : "."));
+        }
+
+        // Undo: every change since the save was opened or last written goes, read again from the file (or the
+        // game), and the Bank moves not written yet go back as when leaving without writing.
+        void undoChanges()
+        {
+            app::confirm("Undo every change since the save was opened or last written?", [this]()
+                {
+                    std::string error;
+                    auto fresh = OpenSave::open(save->ref, error);
+                    if (!fresh)
+                    {
+                        app::message("Undo changes", error.empty() ? "The save could not be read again." : error);
+                        return;
+                    }
+                    undoDeposits();
+                    *save = std::move(*fresh);
+                    save->dirty = false;
+                    refresh();
+                    app::toast("Changes undone.");
+                },
+                "Undo", "Keep them");
         }
 
         // Restore points: the save as it was before an earlier write. A restore keeps a restore point of the
