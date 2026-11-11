@@ -53,4 +53,31 @@ namespace encounters
     const std::vector<Static>& statics(const pksm::Sav& sav);
     std::string place(const pksm::Sav& sav, const Static& s);
     void make(pksm::PKX& pk, const pksm::Sav& sav, const Static& s);
+
+    // In-game trades (Generations 3-7, tools/trades.py -> romfs/enc/t<version>.txt): the NPC's Pokémon with
+    // its fixed PID (Gen 3-4, Black/White), fixed IVs, contest stats, trainer and nickname in the save's
+    // language, and the trade memories of Generations 6 and 7.
+    struct Trade
+    {
+        int gen = 0;
+        u16 species = 0;
+        u8 form = 0, level = 0;
+        u16 location = 0;
+        bool fixedPid = false;
+        u32 pid = 0;
+        u16 tid = 0, sid = 0;
+        u8 otGender = 0;
+        int gender = -1, nature = -1; // -1: random
+        u8 ability = 0;
+        int ivs[6] = {-1, -1, -1, -1, -1, -1};
+        u8 contest[6] = {};
+        u16 moves[4] = {};
+        u16 memory[4] = {};
+        bool fixedNickname = true, evolve = false;
+        std::string nicknames, trainers; // "lang=name|lang=name"
+    };
+    const std::vector<Trade>& trades(const pksm::Sav& sav);
+    // The trainer and nickname in the save's language.
+    std::string tradeTrainer(const pksm::Sav& sav, const Trade& t);
+    void make(pksm::PKX& pk, const pksm::Sav& sav, const Trade& t);
 }

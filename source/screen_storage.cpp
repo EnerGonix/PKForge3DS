@@ -1766,7 +1766,8 @@ namespace
                     o.push_back({"New Pokémon", [this]() { create(); }, "A level 5 Pokémon from this save's trainer."});
                     o.push_back({"Catch in the wild", [this]() { catchWild(); },
                         "Where a species can be caught or received in this game, and one made there as the game makes it.",
-                        !encounters::of(*sav()).empty() || !encounters::statics(*sav()).empty()});
+                        !encounters::of(*sav()).empty() || !encounters::statics(*sav()).empty() ||
+                            !encounters::trades(*sav()).empty()});
                     o.push_back({"New egg", [this]() { newEgg(); }, "An egg of any species this game has, as from the Day Care."});
                     o.push_back({"Egg factory", [this]() { eggFactory(); }, "One egg of every species, perfect IVs or shiny if you like."});
                 }
@@ -3064,6 +3065,10 @@ namespace
             {
                 species.push_back(e.species);
             }
+            for (const auto& e : encounters::trades(*sav()))
+            {
+                species.push_back(e.species);
+            }
             std::sort(species.begin(), species.end());
             species.erase(std::unique(species.begin(), species.end()), species.end());
             std::vector<screens::PickItem> items;
@@ -3102,6 +3107,15 @@ namespace
                                                                   std::to_string(e.level), "A gets this one."});
                         }
                     }
+                    const auto& trades = encounters::trades(*sav());
+                    for (size_t i = 0; i < trades.size(); i++)
+                    {
+                        if (trades[i].species == species)
+                        {
+                            fixed.push_back({int(200000 + i), "In-game trade from " + encounters::tradeTrainer(*sav(), trades[i]) +
+                                                                  "  -  Lv. " + std::to_string(trades[i].level), "A gets this one."});
+                        }
+                    }
                     spots.insert(spots.begin(), fixed.begin(), fixed.end());
                     std::vector<std::string> other = encounters::elsewhere(*sav(), u16(species));
                     if (!other.empty())
@@ -3124,6 +3138,17 @@ namespace
                                     list += (list.empty() ? "" : ", ") + g;
                                 }
                                 app::message("Also wild in", list + ".\nCatch it there and move it here through the Bank.");
+                                return;
+                            }
+                            if (index >= 200000)
+                            {
+                                const encounters::Trade& tr = encounters::trades(*sav())[index - 200000];
+                                auto pk = freshPk();
+                                encounters::make(*pk, *sav(), tr);
+                                writeSlot(s, pk.get());
+                                refresh();
+                                app::toast(pk->nickname() + " received in a trade from " + encounters::tradeTrainer(*sav(), tr) +
+                                           ". Write the save to keep it.");
                                 return;
                             }
                             if (index >= 100000)

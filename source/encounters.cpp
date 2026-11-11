@@ -726,4 +726,272 @@ namespace encounters
         }
         finish(pk, sav, s.moves);
     }
+
+    namespace
+    {
+        std::string langCode(pksm::Language l)
+        {
+            switch (l)
+            {
+                case pksm::Language::JPN: return "ja";
+                case pksm::Language::FRE: return "fr";
+                case pksm::Language::ITA: return "it";
+                case pksm::Language::GER: return "de";
+                case pksm::Language::SPA: return "es";
+                case pksm::Language::KOR: return "ko";
+                case pksm::Language::CHS: return "zh-Hans";
+                case pksm::Language::CHT: return "zh-Hant";
+                default: return "en";
+            }
+        }
+
+        std::string pickName(const std::string& all, const std::string& lang)
+        {
+            std::string fallback;
+            size_t a = 0;
+            while (a < all.size())
+            {
+                size_t b = all.find('|', a);
+                std::string item = all.substr(a, b == std::string::npos ? std::string::npos : b - a);
+                size_t eq = item.find('=');
+                if (eq != std::string::npos)
+                {
+                    if (item.substr(0, eq) == lang)
+                    {
+                        return item.substr(eq + 1);
+                    }
+                    if (item.substr(0, eq) == "en")
+                    {
+                        fallback = item.substr(eq + 1);
+                    }
+                }
+                if (b == std::string::npos)
+                {
+                    break;
+                }
+                a = b + 1;
+            }
+            return fallback;
+        }
+
+        std::vector<std::string> fields(const std::string& line, char sep)
+        {
+            std::vector<std::string> out;
+            size_t a = 0;
+            for (;;)
+            {
+                size_t b = line.find(sep, a);
+                out.push_back(line.substr(a, b == std::string::npos ? std::string::npos : b - a));
+                if (b == std::string::npos)
+                {
+                    return out;
+                }
+                a = b + 1;
+            }
+        }
+    }
+
+    const std::vector<Trade>& trades(const pksm::Sav& sav)
+    {
+        static std::map<int, std::vector<Trade>> cache;
+        int version = int(u8(sav.version()));
+        auto found  = cache.find(version);
+        if (found != cache.end())
+        {
+            return found->second;
+        }
+        std::vector<Trade>& out = cache[version];
+        std::string text;
+        if (!files::readText("romfs:/enc/t" + std::to_string(version) + ".txt", text))
+        {
+            return out;
+        }
+        for (const std::string& line : fields(text, '\n'))
+        {
+            auto f = fields(line, '\t');
+            if (f.size() < 20)
+            {
+                continue;
+            }
+            Trade t;
+            t.gen      = atoi(f[0].c_str());
+            t.species  = u16(atoi(f[1].c_str()));
+            t.form     = u8(atoi(f[2].c_str()));
+            t.level    = u8(atoi(f[3].c_str()));
+            t.location = u16(atoi(f[4].c_str()));
+            t.fixedPid = f[5] != "R";
+            t.pid      = t.fixedPid ? u32(strtoul(f[5].c_str(), nullptr, 16)) : 0;
+            t.tid      = u16(atoi(f[6].c_str()));
+            t.sid      = u16(atoi(f[7].c_str()));
+            t.otGender = u8(atoi(f[8].c_str()));
+            t.gender   = f[9] == "R" ? -1 : atoi(f[9].c_str());
+            t.nature   = f[10] == "R" ? -1 : atoi(f[10].c_str());
+            t.ability  = u8(atoi(f[11].c_str()));
+            auto ivs = fields(f[12], ','), contest = fields(f[13], ','), moves = fields(f[14], ','), mem = fields(f[15], ',');
+            for (int i = 0; i < 6; i++)
+            {
+                t.ivs[i]     = i < int(ivs.size()) ? atoi(ivs[i].c_str()) : -1;
+                t.contest[i] = u8(i < int(contest.size()) ? atoi(contest[i].c_str()) : 0);
+            }
+            for (int i = 0; i < 4; i++)
+            {
+                t.moves[i]  = u16(i < int(moves.size()) ? atoi(moves[i].c_str()) : 0);
+                t.memory[i] = u16(i < int(mem.size()) ? atoi(mem[i].c_str()) : 0);
+            }
+            t.fixedNickname = f[16] == "1";
+            t.evolve        = f[17] == "1";
+            t.nicknames     = f[18];
+            t.trainers      = f[19];
+            out.push_back(t);
+        }
+        return out;
+    }
+
+    std::string tradeTrainer(const pksm::Sav& sav, const Trade& t) { return pickName(t.trainers, langCode(sav.language())); }
+
+    void make(pksm::PKX& pk, const pksm::Sav& sav, const Trade& t)
+    {
+        int gen = genOf(sav);
+        base(pk, gen, t.species, t.form, t.level, t.location);
+        std::string lang = langCode(sav.language());
+        pk.TID(t.tid);
+        pk.SID(t.sid);
+        pk.otName(pickName(t.trainers, lang));
+        pk.otGender(pksm::Gender{t.otGender});
+        pk.ball(pksm::Ball{4});
+        u8 abilityIndex;
+        u32 pid;
+        if (t.fixedPid)
+        {
+            pid          = t.pid;
+            abilityIndex = t.ability == 0 ? u8(gen <= 4 ? (pid & 1) : (pid >> 16) & 1) : u8(t.ability - 1);
+        }
+        else if (gen == 5)
+        {
+            // B2W2 (PKHeX EncounterTrade5B2W2): the Monochrome rules without the wild xor, ability bit forced.
+            pid = random32();
+            if (t.gender >= 0 && t.gender < 2)
+            {
+                u8 gr = pk.genderType();
+                if (gr != 0 && gr != 254 && gr != 255)
+                {
+                    pid = (pid & 0xFFFFFF00) | (t.gender == 0 ? u32(gr + rand() % (254 - gr)) : u32(1 + rand() % (gr - 1)));
+                }
+            }
+            if (shiny3(pk.TID(), pk.SID(), pid))
+            {
+                pid ^= 0x10000000;
+            }
+            if (t.ability == 1 || t.ability == 2)
+            {
+                pid = (pid & ~0x10000u) | (t.ability == 2 ? 0x10000u : 0u);
+            }
+            abilityIndex = t.ability == 3 ? 2 : u8((pid >> 16) & 1);
+        }
+        else
+        {
+            // Gen 6/7: random, not shiny.
+            pid = random32();
+            if (((pk.TID() ^ pk.SID() ^ (pid >> 16) ^ (pid & 0xFFFF)) >> 4) == 0)
+            {
+                pid ^= 0x10000000;
+            }
+            abilityIndex = t.ability == 0 ? u8(rand() % 2) : u8(t.ability - 1);
+        }
+        // Everything that re-rolls the PID in PKSM-Core first (gender, nature, ability number), the PID last.
+        if (gen >= 5 || gen == 4)
+        {
+            if (t.gender == 2)
+            {
+                pk.gender(pksm::Gender::Genderless);
+            }
+            else if (t.gender >= 0)
+            {
+                pk.gender(pksm::Gender{u8(t.gender)});
+            }
+            else
+            {
+                pk.gender(pksm::PKX::genderFromRatio(pid, pk.genderType()));
+            }
+        }
+        if (gen >= 5)
+        {
+            pk.nature(pksm::Nature{u8(t.nature >= 0 ? t.nature : rand() % 25)});
+        }
+        if (gen >= 6)
+        {
+            pk.setAbility(u8(1 << abilityIndex));
+            pk.PID(pid);
+            pk.encryptionConstant(random32());
+        }
+        else
+        {
+            pk.ability(pk.abilities(abilityIndex));
+            if (gen == 5)
+            {
+                static_cast<pksm::PK5&>(pk).hiddenAbility(abilityIndex == 2);
+            }
+            pk.PID(pid);
+            if (gen == 3)
+            {
+                pk.setAbility(abilityIndex); // Gen 3 keeps it as a bit, beside the PID
+            }
+        }
+        static const pksm::Stat stats[] = {pksm::Stat::HP, pksm::Stat::ATK, pksm::Stat::DEF, pksm::Stat::SPD,
+            pksm::Stat::SPATK, pksm::Stat::SPDEF};
+        for (int i = 0; i < 6; i++)
+        {
+            pk.iv(stats[i], t.ivs[i] >= 0 ? u8(t.ivs[i]) : u8(rand() % (pk.maxIV() + 1)));
+        }
+        if (gen <= 4)
+        {
+            for (u8 i = 0; i < 6; i++)
+            {
+                pk.contest(i, t.contest[i]);
+            }
+        }
+        if (t.fixedNickname)
+        {
+            pk.nickname(pickName(t.nicknames, lang));
+            pk.nicknamed(true);
+        }
+        if (gen >= 6)
+        {
+            geo(pk, sav, gen);
+            if (gen == 6)
+            {
+                auto& pk6 = static_cast<pksm::PK6&>(pk);
+                pk6.otMemory(u8(t.memory[0]));
+                pk6.otIntensity(u8(t.memory[1]));
+                pk6.otFeeling(u8(t.memory[2]));
+                pk6.otTextVar(t.memory[3]);
+                pk6.htName(sav.otName());
+                pk6.htGender(sav.gender());
+                pk6.currentHandler(pksm::PKXHandler::NonOT);
+                pk6.htFriendship(pk.baseFriendship());
+            }
+            else
+            {
+                auto& pk7 = static_cast<pksm::PK7&>(pk);
+                pk7.otMemory(u8(t.memory[0]));
+                pk7.otIntensity(u8(t.memory[1]));
+                pk7.otFeeling(u8(t.memory[2]));
+                pk7.otTextVar(t.memory[3]);
+                pk7.htName(sav.otName());
+                pk7.htGender(sav.gender());
+                pk7.currentHandler(pksm::PKXHandler::NonOT);
+                pk7.htFriendship(pk.baseFriendship());
+            }
+        }
+        finish(pk, sav, t.moves);
+        if (t.evolve)
+        {
+            pk.species(pksm::Species{u16(t.species + 1)});
+            if (!t.fixedNickname)
+            {
+                pk.nickname(i18n::species(pk.language(), pk.species()));
+            }
+            pk.refreshChecksum();
+        }
+    }
 }

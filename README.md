@@ -112,7 +112,7 @@ The top screen is PKForge's second-screen inspector; the touch screen holds the 
 - **Legality**: offline checks and fixes (moves the species line can learn, abilities, items, balls, IV/EV/PP
   limits), and PKHeX's full check through FlagBrew's [local-gpss](https://github.com/FlagBrew/local-gpss)
   on a computer on the same Wi-Fi (START > Legality server).
-- **Catch in the wild**: every wild, static and gift encounter of the game (Generations 1 to 7, from PKHeX's
+- **Catch in the wild**: every wild, static, gift and in-game trade encounter of the game (Generations 1 to 7, from PKHeX's
   tables: place, kind, levels) and the other games where the species is wild; a Pokémon caught there is made
   the way the game makes it (Method H in Gen 3, J/K in Gen 4, Method 1 for statics, the Gen 5 PID rules,
   perfect IVs and locks in Gen 6-7), so PKHeX's legality check accepts it.
@@ -152,7 +152,7 @@ Settings › Check for updates downloads the newest `PKForge.cia` from this page
 its SHA-256 against GitHub's and installs it, then restarts. A quiet check runs once a day.
 
 ### Not in this port yet
-In-game trades, honey trees, Safari, the Bug Contest and headbutt trees in Catch in the wild. Colosseum/XD
+Honey trees, Safari, the Bug Contest and headbutt trees in Catch in the wild. Colosseum/XD
 saves and ROM hacks are not planned. Let's Go and the Switch games are out of scope.
 
 ## Install and update
@@ -193,7 +193,8 @@ not in the repository: get them from Project_CTR and Epicpkmn11's bannertool rel
 
 `tools/encounters.py <PKHeX checkout> romfs` packs PKHeX's wild encounter tables (Generations 1 to 7) and
 English location names into `romfs/enc` for Catch in the wild, and `tools/statics.py <PKHeX checkout> romfs`
-its static and gift encounters (read from PKHeX's C# lists).
+its static and gift encounters, and `tools/trades.py <PKHeX checkout> romfs` its in-game trades with their
+trainers' and nicknames in every language (both read from PKHeX's C# lists and text files).
 
 `tools/assets.py` converts PKForge's resources once into `romfs/` (delete `romfs/.assets-done` to redo
 it). `tools/run-autotest.ps1` runs a script from `tests/` in Azahar and saves screenshots; scripts can
