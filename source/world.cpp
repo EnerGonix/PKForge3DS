@@ -6,6 +6,9 @@
 #include "pkx/PK2.hpp"
 #include "sav/Item.hpp"
 #include "sav/Sav4.hpp"
+#include "files.hpp"
+#include "screens.hpp"
+#include <map>
 #include "utils/ValueConverter.hpp"
 #include <algorithm>
 #include <cstdio>
@@ -1039,7 +1042,379 @@ namespace world
         }
     }
 
-    bool hasAny(const pksm::Sav& sav) { return gameOf(sav) != Game::None; }
+    // ------------------------------------------------------------------ event flags and work (the original's
+    // EventFlagsEditor, PKHeX's SAV_EventFlags): every flag and work value of the game, PKHeX's labels first.
+    namespace
+    {
+        struct EventSpace
+        {
+            int flagAt = -1, flags = 0, workAt = -1, works = 0, workSize = 2;
+            int where = 0; // 0 raw save, 3 Gen 3 large block, 4 Gen 4 general block
+            std::string labels; // romfs/flags/<kind>_<labels>.txt
+        };
+
+        EventSpace eventSpace(const pksm::Sav& sav)
+        {
+            EventSpace e;
+            u8 v      = u8(sav.version());
+            bool jp   = sav.language() == pksm::Language::JPN;
+            bool kr   = sav.language() == pksm::Language::KOR;
+            switch (v)
+            {
+                case 35: case 36: case 37: case 38: // Red, Green, Blue, Yellow
+                    e.flagAt = jp ? 0x29E9 : 0x29F3, e.flags = 0xA00;
+                    e.workAt = jp ? 0x2892 : 0x289C, e.works = 0x100, e.workSize = 1;
+                    break;
+                case 39: case 40: case 41: // Gold, Silver, Crystal
+                    e.flagAt   = kr ? 0x25F7 : v == 41 ? (jp ? 0x25E2 : 0x2600) : (jp ? 0x2600 : 0x261F);
+                    e.flags    = 2000;
+                    e.workAt   = e.flagAt - 0x100, e.works = 0x100, e.workSize = 1;
+                    e.labels   = v == 41 ? "c" : "gs";
+                    break;
+                case 1: case 2: e.flagAt = 0x1220, e.flags = 2304, e.workAt = 0x1340, e.works = 0x100, e.where = 3, e.labels = "rs"; break;
+                case 3: e.flagAt = 0x1270, e.flags = 2400, e.workAt = 0x139C, e.works = 0x100, e.where = 3, e.labels = "e"; break;
+                case 4: case 5: e.flagAt = 0xEE0, e.flags = 2304, e.workAt = 0x1000, e.works = 0x100, e.where = 3, e.labels = "frlg"; break;
+                case 10: case 11: e.flagAt = 0xFDC, e.workAt = 0xD9C, e.labels = "dp"; break;
+                case 12: e.flagAt = 0xFEC, e.workAt = 0xDAC, e.labels = "pt"; break;
+                case 7: case 8: e.flagAt = 0x10C4, e.workAt = 0xDE4, e.labels = "hgss"; break;
+                case 20: case 21: e.workAt = 0x20100, e.works = 0x13E, e.flags = 0xB60, e.labels = "bw"; break;
+                case 22: case 23: e.workAt = 0x1FF00, e.works = 0x1AF, e.flags = 0xBF8, e.labels = "b2w2"; break;
+                case 24: case 25: e.workAt = 0x14A00, e.works = 0x178, e.flags = 0xD00, e.labels = "xy"; break;
+                case 26: case 27: e.workAt = 0x14A00, e.works = 0x178, e.flags = 0xD00, e.labels = "oras"; break;
+                case 30: case 31: e.workAt = 0x1C00, e.works = 1000, e.flags = 4000, e.labels = "sm"; break;
+                case 32: case 33: e.workAt = 0x1E00, e.works = 1000, e.flags = 4960, e.labels = "usum"; break;
+                default: break;
+            }
+            if (v == 10 || v == 11 || v == 12 || v == 7 || v == 8)
+            {
+                e.flags = 0xB60, e.works = (e.flagAt - e.workAt) / 2, e.where = 4;
+            }
+            if (v >= 20 && v <= 33)
+            {
+                e.flagAt = e.workAt + e.works * 2; // the work values first, then the flags
+            }
+            return e;
+        }
+
+        u8* eventByte(pksm::Sav& sav, const EventSpace& e, int offset)
+        {
+            if (e.where == 3)
+            {
+                return gen3Large(sav, offset);
+            }
+            if (e.where == 4)
+            {
+                u8* general = gen4General(sav);
+                return general ? general + offset : nullptr;
+            }
+            return offset >= 0 && u32(offset) < sav.getLength() ? raw(sav) + offset : nullptr;
+        }
+
+        bool eventFlag(pksm::Sav& sav, const EventSpace& e, int n)
+        {
+            u8* b = eventByte(sav, e, e.flagAt + (n >> 3));
+            return b && (*b >> (n & 7) & 1);
+        }
+        void eventFlag(pksm::Sav& sav, const EventSpace& e, int n, bool on)
+        {
+            if (u8* b = eventByte(sav, e, e.flagAt + (n >> 3)))
+            {
+                *b = on ? u8(*b | (1 << (n & 7))) : u8(*b & ~(1 << (n & 7)));
+            }
+        }
+        int eventWork(pksm::Sav& sav, const EventSpace& e, int i)
+        {
+            u8* p = eventByte(sav, e, e.workAt + i * e.workSize);
+            if (!p)
+            {
+                return 0;
+            }
+            return e.workSize == 1 ? *p : rd16(p);
+        }
+        void eventWork(pksm::Sav& sav, const EventSpace& e, int i, int value)
+        {
+            if (u8* p = eventByte(sav, e, e.workAt + i * e.workSize))
+            {
+                if (e.workSize == 1)
+                {
+                    *p = u8(value);
+                }
+                else
+                {
+                    wr16(p, u16(value));
+                }
+            }
+        }
+
+        struct EventLabel
+        {
+            char category = 0;
+            std::string name;
+            std::vector<std::pair<int, std::string>> presets;
+        };
+
+        std::map<int, EventLabel> eventLabels(const std::string& file)
+        {
+            std::map<int, EventLabel> out;
+            std::string text;
+            if (!files::readText("romfs:/flags/" + file + ".txt", text))
+            {
+                return out;
+            }
+            size_t a = 0;
+            while (a < text.size())
+            {
+                size_t b = text.find('\n', a);
+                std::string line = text.substr(a, b == std::string::npos ? std::string::npos : b - a);
+                a = b == std::string::npos ? text.size() : b + 1;
+                if (!line.empty() && line.back() == '\r')
+                {
+                    line.pop_back();
+                }
+                std::vector<std::string> f;
+                size_t c = 0;
+                while (true)
+                {
+                    size_t t = line.find('\t', c);
+                    f.push_back(line.substr(c, t == std::string::npos ? std::string::npos : t - c));
+                    if (t == std::string::npos)
+                    {
+                        break;
+                    }
+                    c = t + 1;
+                }
+                if (f.size() < 3 || f[0].empty() || !isdigit(u8(f[0][0])))
+                {
+                    continue;
+                }
+                EventLabel l;
+                l.category = f[1].empty() ? 0 : f[1][0];
+                l.name     = f[2];
+                if (f.size() > 3)
+                {
+                    size_t p = 0;
+                    std::string list = f[3];
+                    while (p < list.size())
+                    {
+                        size_t q = list.find(',', p);
+                        std::string item = list.substr(p, q == std::string::npos ? std::string::npos : q - p);
+                        size_t colon = item.find(':');
+                        if (colon != std::string::npos)
+                        {
+                            l.presets.push_back({atoi(item.c_str()), item.substr(colon + 1)});
+                        }
+                        p = q == std::string::npos ? list.size() : q + 1;
+                    }
+                }
+                out[atoi(f[0].c_str())] = l;
+            }
+            return out;
+        }
+
+        // Red/Blue/Yellow: PKHeX names only its overworld static encounters (G1OverworldSpawner).
+        std::map<int, EventLabel> gen1Labels(bool yellow)
+        {
+            std::map<int, EventLabel> m;
+            auto add = [&](int i, const char* n) { m[i] = EventLabel{'e', n, {}}; };
+            add(0x045, "Eevee (Celadon Mansion)");
+            add(0x069, "Aerodactyl (Old Amber)");
+            add(0x356, "Hitmonlee (Fighting Dojo)");
+            add(0x357, "Hitmonchan (Fighting Dojo)");
+            add(0x461, "Voltorb 1 (Power Plant)");
+            add(0x462, "Voltorb 2 (Power Plant)");
+            add(0x463, "Voltorb 3 (Power Plant)");
+            add(0x464, "Electrode 1 (Power Plant)");
+            add(0x465, "Voltorb 4 (Power Plant)");
+            add(0x466, "Voltorb 5 (Power Plant)");
+            add(0x467, "Electrode 2 (Power Plant)");
+            add(0x468, "Voltorb 6 (Power Plant)");
+            add(0x469, "Zapdos");
+            add(0x53E, "Moltres");
+            add(0x57E, "Kabuto (Dome Fossil)");
+            add(0x57F, "Omanyte (Helix Fossil)");
+            add(0x8C1, "Mewtwo");
+            add(0x9DA, "Articuno");
+            if (yellow)
+            {
+                add(0x0A8, "Bulbasaur (Cerulean City)");
+                add(0x147, "Squirtle (Vermilion City)");
+                add(0x54F, "Charmander (Route 24)");
+            }
+            return m;
+        }
+
+        const char* categoryName(char c)
+        {
+            switch (c)
+            {
+                case 's': return "Story";
+                case 'e': return "Event encounter";
+                case 'g': return "Gift";
+                case 'r': return "Rebattle";
+                case 'h': return "Hidden item";
+                case 't': return "Trainer";
+                case 'f': return "Fly spot";
+                case 'a': return "Achievement";
+                case '+': return "Statistic";
+                case '*': return "Feature";
+                case 'm': return "Misc";
+                default: return "";
+            }
+        }
+
+        std::string idText(int i)
+        {
+            char b[8];
+            snprintf(b, sizeof(b), "%04d", i);
+            return b;
+        }
+
+        void flagList(std::shared_ptr<OpenSave> save, bool labelledOnly, int at);
+        void workList(std::shared_ptr<OpenSave> save, bool labelledOnly, int at);
+
+        void flagList(std::shared_ptr<OpenSave> save, bool labelledOnly, int at)
+        {
+            pksm::Sav& sav = *save->sav;
+            EventSpace e   = eventSpace(sav);
+            auto labels    = std::make_shared<std::map<int, EventLabel>>(
+                e.labels.empty() ? gen1Labels(u8(sav.version()) == 38) : eventLabels("flags_" + e.labels));
+            std::vector<screens::PickItem> items;
+            for (int i = 0; i < e.flags; i++)
+            {
+                auto l = labels->find(i);
+                if (labelledOnly && l == labels->end())
+                {
+                    continue;
+                }
+                std::string name = l != labels->end() ? l->second.name : "Flag " + idText(i);
+                std::string cat  = l != labels->end() ? categoryName(l->second.category) : "";
+                items.push_back({i, std::string(eventFlag(sav, e, i) ? "[On]  " : "[Off]  ") + idText(i) + "  " + name,
+                    cat.empty() ? "" : cat + (l->second.category == 's' ? " - story progress: changing it can break the story." : "")});
+            }
+            app::push(screens::picker(labelledOnly ? "Event flags" : "Every event flag", std::move(items), at,
+                [save, labelledOnly, labels](int i)
+                {
+                    auto flip = [save, labelledOnly, i]()
+                    {
+                        EventSpace e = eventSpace(*save->sav);
+                        eventFlag(*save->sav, e, i, !eventFlag(*save->sav, e, i));
+                        save->dirty = true;
+                        flagList(save, labelledOnly, i);
+                    };
+                    auto l = labels->find(i);
+                    if (l != labels->end() && l->second.category == 's')
+                    {
+                        app::confirm("\"" + l->second.name + "\" is story progress: changing it can break the story. "
+                                     "Change it anyway?", flip, "Change it", "Cancel");
+                    }
+                    else
+                    {
+                        flip();
+                    }
+                }));
+        }
+
+        void workList(std::shared_ptr<OpenSave> save, bool labelledOnly, int at)
+        {
+            pksm::Sav& sav = *save->sav;
+            EventSpace e   = eventSpace(sav);
+            auto labels    = std::make_shared<std::map<int, EventLabel>>(
+                e.labels.empty() ? std::map<int, EventLabel>{} : eventLabels("const_" + e.labels));
+            std::vector<screens::PickItem> items;
+            for (int i = 0; i < e.works; i++)
+            {
+                auto l = labels->find(i);
+                if (labelledOnly && l == labels->end())
+                {
+                    continue;
+                }
+                int value        = eventWork(sav, e, i);
+                std::string name = l != labels->end() ? l->second.name : "Work " + idText(i);
+                std::string shown = std::to_string(value);
+                if (l != labels->end())
+                {
+                    for (auto& [pv, pn] : l->second.presets)
+                    {
+                        if (pv == value)
+                        {
+                            shown = pn + " (" + shown + ")";
+                        }
+                    }
+                }
+                items.push_back({i, idText(i) + "  " + name + ":  " + shown, l != labels->end() ? categoryName(l->second.category) : ""});
+            }
+            app::push(screens::picker(labelledOnly ? "Event work values" : "Every work value", std::move(items), at,
+                [save, labelledOnly, labels](int i)
+                {
+                    EventSpace e = eventSpace(*save->sav);
+                    int max      = e.workSize == 1 ? 255 : 65535;
+                    auto l       = labels->find(i);
+                    auto setTo   = [save, labelledOnly, i](int v)
+                    {
+                        EventSpace e = eventSpace(*save->sav);
+                        eventWork(*save->sav, e, i, v);
+                        save->dirty = true;
+                        workList(save, labelledOnly, i);
+                    };
+                    if (l != labels->end() && !l->second.presets.empty())
+                    {
+                        std::vector<screens::PickItem> choices;
+                        for (auto& [pv, pn] : l->second.presets)
+                        {
+                            choices.push_back({pv, pn + " (" + std::to_string(pv) + ")", ""});
+                        }
+                        choices.push_back({-1, "Another value...", ""});
+                        app::push(screens::picker(l->second.name, std::move(choices), eventWork(*save->sav, e, i),
+                            [save, i, max, setTo](int pv)
+                            {
+                                if (pv >= 0)
+                                {
+                                    setTo(pv);
+                                    return;
+                                }
+                                int v = eventWork(*save->sav, eventSpace(*save->sav), i);
+                                if (app::numpad("Work " + idText(i), v, 0, max))
+                                {
+                                    setTo(v);
+                                }
+                            }));
+                        return;
+                    }
+                    int v = eventWork(*save->sav, e, i);
+                    if (app::numpad("Work " + idText(i), v, 0, max))
+                    {
+                        setTo(v);
+                    }
+                }));
+        }
+    }
+
+    bool hasEventFlags(const pksm::Sav& sav) { return eventSpace(sav).flags > 0; }
+
+    void eventFlags(std::shared_ptr<OpenSave> save)
+    {
+        EventSpace e = eventSpace(*save->sav);
+        if (!e.flags)
+        {
+            app::message("Event flags", "PKForge has no event flag layout for this game.");
+            return;
+        }
+        std::vector<app::Option> o;
+        if (!e.labels.empty() || u8(save->sav->version()) >= 35)
+        {
+            o.push_back({"Named flags", [save]() { flagList(save, true, -1); }, "The flags PKHeX knows by name."});
+        }
+        if (!e.labels.empty())
+        {
+            o.push_back({"Named work values", [save]() { workList(save, true, -1); }, "Story and event counters PKHeX knows by name."});
+        }
+        o.push_back({"Every flag (" + std::to_string(e.flags) + ")", [save]() { flagList(save, false, -1); }, ""});
+        o.push_back({"Every work value (" + std::to_string(e.works) + ")", [save]() { workList(save, false, -1); }, ""});
+        o.push_back({"Close", []() {}});
+        app::menu("Event flags", std::move(o));
+    }
+
+    bool hasAny(const pksm::Sav& sav) { return gameOf(sav) != Game::None || hasEventFlags(sav); }
 
     bool hasDayCare(const pksm::Sav& sav)
     {
@@ -1087,6 +1462,10 @@ namespace world
     {
         Game g = gameOf(*save->sav);
         std::vector<app::Option> o;
+        if (hasEventFlags(*save->sav))
+        {
+            o.push_back({"Event flags", [save]() { eventFlags(save); }, "Every flag and work value of the game, PKHeX's names first."});
+        }
         if (g == Game::RS || g == Game::E)
         {
             o.push_back({"Clock repair", [save]() { clockMenu(save); }, "Berries and daily events frozen? Fix the clock."});

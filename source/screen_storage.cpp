@@ -1525,8 +1525,18 @@ namespace
                         "Every species and where you have it: the Bank and every save found."});
                     o.push_back({"Mystery Gift", [this]() { mysteryGiftMenu(); },
                         "Every real distribution for this game, sent to its gift inbox."});
+                    if (sav()->generation() >= pksm::Generation::FOUR && sav()->currentGiftAmount() > 0)
+                    {
+                        o.push_back({"Gifts in this save", [this]() { giftInbox(); },
+                            "The Mystery Gift cards the save holds now (read only)."});
+                    }
                     o.push_back({"Complete the Pokédex", [this]() { completeDex(); },
                         "Every species this game has, seen and caught."});
+                    if (recordsOffset() >= 0)
+                    {
+                        o.push_back({"Trainer records", [this]() { trainerRecords(); },
+                            "The game's 200 trainer counters (read only: their meaning differs by game)."});
+                    }
                     if (dexedit::supported(*sav()))
                     {
                         o.push_back({"Pokédex editor", [this]() { if (!hardcoreBlocks()) dexEditor(0); },
@@ -3507,6 +3517,67 @@ namespace
             }
             o.push_back({"Close", []() {}});
             app::menu("Events  -  " + pkdata::game(save->ref.version), std::move(o));
+        }
+
+        // The original's Trainer records (PKHeX RecordBlock6, X/Y to Ultra Sun/Ultra Moon): 100 u32 then
+        // 100 u16 counters, read only.
+        int recordsOffset()
+        {
+            switch (u8(sav()->version()))
+            {
+                case 24: case 25: return 0x1E400;
+                case 26: case 27: return 0x1F400;
+                case 30: case 31: return 0x69C00;
+                case 32: case 33: return 0x6A200;
+                default: return -1;
+            }
+        }
+
+        void trainerRecords()
+        {
+            const u8* d = sav()->rawData().get();
+            int at      = recordsOffset();
+            std::vector<screens::PickItem> items;
+            for (int i = 0; i < 200; i++)
+            {
+                u32 v = i < 100 ? u32(d[at + 4 * i] | d[at + 4 * i + 1] << 8 | d[at + 4 * i + 2] << 16 | u32(d[at + 4 * i + 3]) << 24)
+                                : u32(d[at + 400 + 2 * (i - 100)] | d[at + 401 + 2 * (i - 100)] << 8);
+                items.push_back({i, "Record " + std::to_string(i + 1) + ":  " + std::to_string(v), ""});
+            }
+            app::push(screens::picker("Trainer records", std::move(items), -1, [](int) {}));
+        }
+
+        // The original's Mystery Gift inbox: the cards physically in the save, read only (receiving, deleting
+        // and the received flags stay the game's).
+        void giftInbox()
+        {
+            std::vector<screens::PickItem> items;
+            int n = sav()->currentGiftAmount();
+            for (int i = 0; i < n; i++)
+            {
+                auto wc = sav()->mysteryGift(i);
+                if (!wc)
+                {
+                    continue;
+                }
+                std::string what;
+                if (wc->pokemon())
+                {
+                    what = pkdata::species(u16(wc->species())) + " Lv. " + std::to_string(wc->level()) + (wc->shiny() ? " (shiny)" : "");
+                }
+                else if (wc->item())
+                {
+                    what = "Item: " + pkdata::item(wc->object());
+                }
+                else
+                {
+                    what = "Other gift";
+                }
+                char id[16];
+                snprintf(id, sizeof(id), "#%04u  ", unsigned(wc->ID()));
+                items.push_back({i, std::string(id) + wc->title(), what + (wc->used() ? " - received" : " - waiting")});
+            }
+            app::push(screens::picker("Gifts in this save", std::move(items), -1, [](int) {}));
         }
 
         void mysteryGiftMenu()

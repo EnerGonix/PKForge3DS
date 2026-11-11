@@ -20,15 +20,15 @@ Moon) and GameCube Colosseum/XD; Let's Go and the Switch games are out of scope.
 | Legality check, legalize, Suggest (LegalityAssistUi) | legality | partly (**preview-first Suggest to do**) |
 | Generate wizard / encounter gallery | encounters (Catch in the wild), New egg, egg factory | done |
 | Mystery Gift album (EventGallery) | mysterygift | done |
-| Mystery Gift inbox, read-only (MysteryGiftInboxEditor) | - | **to do** |
+| Mystery Gift inbox, read-only (MysteryGiftInboxEditor) | START > Gifts in this save | done |
 | Day Care (DaycareEditor) | world | done |
 | Dex editor: seen/caught per species (DexEditorPage) | dexedit, START > Pokédex editor | done |
 | Living dex tracker (CollectionDexPage) | livingdex | done |
 | Dex Autopilot | autopilot | done |
-| Event flags and work vars (EventFlagsEditor) | - | **to do** |
+| Event flags and work vars (EventFlagsEditor) | World & events > Event flags (Gen 1-7, PKHeX labels via tools/eventlabels.py) | done |
 | Event reset, key item events, roamers, clock, Apricorns, Pokéwalker, honey trees, Poké Beans | world | done |
 | Entralink (Gen 5) | - | **to do** |
-| Trainer records, read-only (TrainerRecordsEditor) | - | **to do** |
+| Trainer records, read-only (TrainerRecordsEditor) | START > Trainer records (Gen 6-7, as the original) | done |
 | Trainer card, trainer profiles, Bag, presets | screen_trainer, screen_bag, profiles | done |
 | Restore points (BackupHistoryPage), undo | saves | done |
 | HaX, Hardcore, themes, Showdown, QR, hex editor | hax, themes, showdown, qr, screen_hex | done |
