@@ -1436,6 +1436,8 @@ namespace
                 o.push_back({"Bag", [this]() { if (!hardcoreBlocks()) app::push(screens::bag(save)); }});
                 o.push_back({"Trainer card", [this]() { if (!hardcoreBlocks()) app::push(screens::trainer(save)); }});
                 o.push_back({"Write save", [this]() { writeSave(); }, "", save->dirty});
+                o.push_back({"Restore points", [this]() { restoreMenu(); },
+                    "The save as it was before an earlier write: PKForge keeps the 20 newest."});
                 if (side == Side::Save && !party)
                 {
                     o.push_back({"Box manager", [this]() { boxManager(); },
@@ -2911,6 +2913,48 @@ namespace
                                          (skipped ? ", " + std::to_string(skipped) + " skipped" : std::string()) +
                                          (note.empty() ? "" : " (" + note + ")") +
                                          (placed ? ". Write the save to keep them." : "."));
+        }
+
+        // Restore points: the save as it was before an earlier write. A restore keeps a restore point of the
+        // save as it is now first, then PKForge goes back Home so the restored save is read afresh.
+        void restoreMenu()
+        {
+            std::vector<std::string> names = backups::list(save->ref);
+            if (names.empty())
+            {
+                app::message("Restore points", "No restore points yet: PKForge makes one before every write.");
+                return;
+            }
+            std::vector<screens::PickItem> items;
+            for (size_t i = 0; i < names.size(); i++)
+            {
+                std::string n = names[i].substr(0, names[i].size() - 4); // 2026-11-11_08-20-53
+                if (n.size() == 19)
+                {
+                    n = n.substr(0, 10) + "  " + n.substr(11, 2) + ":" + n.substr(14, 2) + ":" + n.substr(17, 2);
+                }
+                items.push_back({int(i), n, i == 0 ? "The newest" : ""});
+            }
+            app::push(screens::picker("Restore points", std::move(items), -1, [this, names](int i)
+                {
+                    std::string text = "Put back the save from " + names[i].substr(0, 10) + "? What it holds now is kept as a new restore point first.";
+                    if (save->dirty)
+                    {
+                        text += " Changes not written yet are lost.";
+                    }
+                    app::confirm(text, [this, name = names[i]]()
+                        {
+                            std::string error;
+                            if (!backups::restore(save->ref, name, error))
+                            {
+                                app::message("Restore points", error);
+                                return;
+                            }
+                            app::pop(); // back Home: the restored save is read again from there
+                            app::message("Restore points", "Restored. Open the save again to see it.");
+                        },
+                        "Restore");
+                }));
         }
 
         // Catch in the wild, as the Android PKForge's encounter gallery: a species of this game's wild tables,

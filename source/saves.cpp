@@ -625,4 +625,52 @@ namespace backups
         }
         return true;
     }
+
+    std::vector<std::string> list(const SaveRef& ref)
+    {
+        std::vector<std::string> names;
+        files::list(folderFor(ref), [&](const std::string& name, bool dir, u64)
+            {
+                if (!dir && name.size() > 4 && name.substr(name.size() - 4) == ".bak")
+                {
+                    names.push_back(name);
+                }
+            });
+        std::sort(names.rbegin(), names.rend());
+        return names;
+    }
+
+    bool restore(const SaveRef& ref, const std::string& name, std::string& error)
+    {
+        bool testSave =
+            ref.isTitle() ? ref.titleId == titles::TEST_TITLE : ref.path.rfind(autotest::TEST_SAVES, 0) == 0;
+        if (autotest::active() && !testSave)
+        {
+            error = "Test scripts only write saves in " + std::string(autotest::TEST_SAVES);
+            return false;
+        }
+        std::vector<u8> bytes;
+        if (!files::read(folderFor(ref) + "/" + name, bytes) || bytes.empty())
+        {
+            error = "The restore point could not be read.";
+            return false;
+        }
+        if (!make(ref, error))
+        {
+            return false;
+        }
+        std::string failure;
+        bool ok = ref.isTitle() ? titles::write(ref, bytes.data(), bytes.size(), failure)
+                                : files::write(ref.path, bytes.data(), bytes.size());
+        if (!ok)
+        {
+            error = failure.empty() ? "Writing " + ref.path + " failed." : failure;
+            return false;
+        }
+        if (!ref.isTitle())
+        {
+            saves::changed(ref.path);
+        }
+        return true;
+    }
 }

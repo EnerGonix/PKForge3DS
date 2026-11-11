@@ -64,4 +64,9 @@ namespace backups
     constexpr int KEEP = 20;
     std::string folderFor(const SaveRef& ref);
     bool make(const SaveRef& ref, std::string& error);
+    // The save's restore points ("2026-11-11_08-20-53.bak"), newest first.
+    std::vector<std::string> list(const SaveRef& ref);
+    // Puts one back: a restore point of what the save holds now first (so a restore can be undone too),
+    // then the backup's bytes written the way a save is written.
+    bool restore(const SaveRef& ref, const std::string& name, std::string& error);
 }
