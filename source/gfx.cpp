@@ -1,4 +1,5 @@
 #include "app.hpp"
+#include "spritepack.hpp"
 #include "gfx.hpp"
 #include "ui_ids.hpp"
 
@@ -689,8 +690,78 @@ namespace gfx
         return true;
     }
 
+    void rgbaImage(const u8* rgba, int w, int h, float cx, float cy, u32 key, float scale)
+    {
+        struct Slot
+        {
+            u32 key = 0;
+            C3D_Tex tex;
+            bool ready = false;
+            Tex3DS_SubTexture sub;
+            u32 used = 0;
+        };
+        static Slot slots[6];
+        static u32 clock = 0;
+        constexpr int TS = 128;
+        Slot* s = nullptr;
+        for (Slot& t : slots)
+        {
+            if (t.ready && t.key == key)
+            {
+                s = &t;
+            }
+        }
+        if (!s)
+        {
+            s = &slots[0];
+            for (Slot& t : slots)
+            {
+                if (!t.ready || t.used < s->used)
+                {
+                    s = &t;
+                }
+            }
+            if (!s->ready)
+            {
+                if (!C3D_TexInit(&s->tex, TS, TS, GPU_RGBA8))
+                {
+                    return;
+                }
+                C3D_TexSetFilter(&s->tex, GPU_LINEAR, GPU_LINEAR);
+                s->ready = true;
+            }
+            u32* dst = static_cast<u32*>(s->tex.data);
+            memset(dst, 0, TS * TS * 4);
+            for (int y = 0; y < h && y < TS; y++)
+            {
+                for (int x = 0; x < w && x < TS; x++)
+                {
+                    const u8* p  = rgba + (y * w + x) * 4;
+                    u32 morton   = (x & 1) | ((y & 1) << 1) | ((x & 2) << 1) | ((y & 2) << 2) | ((x & 4) << 2) | ((y & 4) << 3);
+                    // RGBA8 textures are stored ABGR in memory order on the 3DS GPU.
+                    dst[((((y >> 3) * (TS >> 3)) + (x >> 3)) << 6) + morton] = u32(p[3]) | u32(p[2]) << 8 | u32(p[1]) << 16 | u32(p[0]) << 24;
+                }
+            }
+            C3D_TexFlush(&s->tex);
+            s->sub = {u16(w), u16(h), 0.0f, 1.0f, float(w) / TS, 1.0f - float(h) / TS};
+            s->key = key;
+        }
+        s->used = ++clock;
+        C2D_Image img{&s->tex, &s->sub};
+        C2D_DrawImageAt(img, std::floor(cx - w * scale / 2), std::floor(cy - h * scale / 2), 0.5f, nullptr, scale, scale);
+    }
+
     bool front(int species, int form, bool shiny, bool female, float cx, float cy, float scale)
     {
+        // The HOME render from the sprite pack, when it is switched on and has arrived (base forms).
+        if (form == 0)
+        {
+            if (const u8* home = spritepack::home(species, shiny))
+            {
+                rgbaImage(home, spritepack::SIZE, spritepack::SIZE, cx, cy, u32(species) << 1 | (shiny ? 1 : 0), scale);
+                return true;
+            }
+        }
         const Showdown* sd = lookup(species, form);
         if (!sd)
         {

@@ -21,6 +21,7 @@ cp certs/*.der romfs/certs/
 # The licences of the libraries the updater links (devkitPro portlibs: curl, mbedtls, zlib) go with the app.
 mkdir -p romfs/licenses
 for lib in curl mbedtls zlib; do cp "$DEVKITPRO/portlibs/3ds/licenses/3ds-$lib/"* "romfs/licenses/$lib-$(ls "$DEVKITPRO/portlibs/3ds/licenses/3ds-$lib/")"; done
+cp external/libwebp/COPYING romfs/licenses/libwebp-COPYING.txt; cp external/libwebp/PATENTS romfs/licenses/libwebp-PATENTS.txt
 tex3ds tools/ctr/title-logo.png -f rgba8 -z auto -o romfs/gfx/title.t3x
 # R4 PokéLink rides inside the RomFS; PKForge puts it on the SD card before starting it.
 make -C r4pokelink

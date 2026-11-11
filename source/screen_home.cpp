@@ -2,6 +2,7 @@
 // as cartridge cards, the Bank, Dex Autopilot, Poképark, Events and Settings tiles below. Y (Link) starts
 // R4 PokéLink.
 #include "files.hpp"
+#include "spritepack.hpp"
 #include "hax.hpp"
 #include "legality_online.hpp"
 #include "autopilot.hpp"
@@ -671,6 +672,24 @@ namespace
             o.push_back({newer.empty() ? "Check for updates" : "Update to " + newer, []() { app::push(updater::open()); },
                 std::string("This is PKForge 3DS ") + PORT_VERSION + ". New versions come from GitHub and install here."});
             o.push_back({"Sound", []() { screens::soundMenu(); }, "Music and sound effects, on or off."});
+            o.push_back({std::string("HOME renders: ") + (spritepack::enabled() ? "on" : "off"), []()
+                {
+                    std::vector<app::Option> s;
+                    s.push_back({spritepack::enabled() ? "Turn HOME renders off" : "Turn HOME renders on",
+                        []() { spritepack::enabled(!spritepack::enabled()); },
+                        "The Android PKForge's sprite pack: each Pokémon's HOME render, fetched when first shown. Needs Wi-Fi."});
+                    s.push_back({"Fetch every render now", []()
+                        {
+                            spritepack::enabled(true);
+                            spritepack::downloadAll();
+                            app::message("HOME renders", "Fetching every render in the background (about 3,200, a few MB "
+                                                         "each before shrinking). " + spritepack::status());
+                        },
+                        spritepack::status()});
+                    s.push_back({"Close", []() {}});
+                    app::menu("HOME renders", std::move(s));
+                },
+                "The sprite pack's HOME renders instead of the built-in sprites."});
             o.push_back({std::string("Color theme: ") + themeName(theme()), []()
                 {
                     std::vector<screens::PickItem> items;

@@ -41,7 +41,7 @@ Moon) and GameCube Colosseum/XD; Let's Go and the Switch games are out of scope.
 | Colosseum / XD (.gci) | gamecube.cpp (decrypt, checksums, CK3/XK3 as PK3, Shadow data kept) | done (bag and Strategy Memo not edited) |
 | RetroArch save containers, SRAM padding | container (RZIP, chip padding, RTC footer; put back on write) | done |
 | Collection Center (community event collections, online) | Bank START > Collection Center (RoC's PC via GitHub, a week's cache) | done |
-| Sprite pack downloader (online) | - | to decide (sprites are built in) |
+| Sprite pack downloader (online) | Settings > HOME renders (renders pulled one by one out of the original's pack by HTTP range; WebP via vendored libwebp) | done (animated Showdown sprites left out: the 3DS cannot play them) |
 | Second screen (Thor/Ayn dual screen) | top screen inspector | done by design (the 3DS has two screens) |
 | Gen 8/9 save blocks, Move Shop, Grand Underground, Tera | - | out of scope (Switch) |
 | Bad Apple!! easter egg | - | not ported: the song is not free to redistribute |

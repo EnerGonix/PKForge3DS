@@ -1,5 +1,6 @@
 // PKForge for Nintendo 3DS: entry point.
 #include "app.hpp"
+#include "spritepack.hpp"
 #include "audio.hpp"
 #include "bank.hpp"
 #include "facts.hpp"
@@ -155,6 +156,7 @@ int main()
     app::run();
     saves::stopScan();
 
+    spritepack::stop();
     audio::exit();
     gfx::exit();
     i18n::exit();

@@ -19,4 +19,6 @@ namespace updater
     std::unique_ptr<Screen> open();
     // One verified HTTPS GET (the updater's curl + mbedtls, its root certificates), the whole body into out.
     bool fetch(const std::string& url, std::vector<u8>& out, std::string& error);
+    // Bytes from..to (inclusive) of a file, by an HTTP range request.
+    bool fetchRange(const std::string& url, u64 from, u64 to, std::vector<u8>& out, std::string& error);
 }

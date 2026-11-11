@@ -26,13 +26,18 @@ SOURCES		:=	source \
 				$(CORE)/memecrypto \
 				external/qrcodegen \
 				external/quirc \
-				external/audio
+				external/audio \
+				external/libwebp/src/dec \
+				external/libwebp/src/dsp \
+				external/libwebp/src/utils
 DATA		:=	data
 INCLUDES	:=	include \
 				external/qrcodegen \
 				external/quirc \
 				external/stb \
 				external/audio \
+				external/libwebp \
+				external/libwebp/src \
 				$(CORE)/include \
 				$(CORE)/include/enums \
 				$(CORE)/include/personal \

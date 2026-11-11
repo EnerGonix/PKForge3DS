@@ -355,7 +355,8 @@ namespace updater
 
         // One verified HTTPS GET with curl + mbedtls, following GitHub's redirects (https only). sink gets
         // the body of the final answer, from byte `from` on (an HTTP Range request, to resume a download).
-        bool get(const std::string& url, const std::function<bool(const u8*, u32)>& sink, std::string& error, u64 from = 0)
+        bool get(const std::string& url, const std::function<bool(const u8*, u32)>& sink, std::string& error, u64 from = 0,
+            u64 to = 0)
         {
             CURL* c = curl_easy_init();
             if (!c)
@@ -382,7 +383,13 @@ namespace updater
             curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, onData);
             curl_easy_setopt(c, CURLOPT_WRITEDATA, &s);
             curl_easy_setopt(c, CURLOPT_SOCKOPTFUNCTION, onSocket);
-            if (from)
+            char rangeText[48];
+            if (to)
+            {
+                snprintf(rangeText, sizeof(rangeText), "%llu-%llu", (unsigned long long)from, (unsigned long long)to);
+                curl_easy_setopt(c, CURLOPT_RANGE, rangeText);
+            }
+            else if (from)
             {
                 curl_easy_setopt(c, CURLOPT_RESUME_FROM_LARGE, curl_off_t(from));
             }
@@ -854,6 +861,23 @@ namespace updater
                 return out.size() < 8 * 1024 * 1024;
             },
             error);
+    }
+
+    bool fetchRange(const std::string& url, u64 from, u64 to, std::vector<u8>& out, std::string& error)
+    {
+        Net net;
+        if (!net.ok)
+        {
+            error = "No connection. Is the Wi-Fi on?";
+            return false;
+        }
+        out.clear();
+        return get(url, [&out](const u8* d, u32 n)
+            {
+                out.insert(out.end(), d, d + n);
+                return out.size() < 16 * 1024 * 1024;
+            },
+            error, from, to);
     }
 
     void checkInBackground()

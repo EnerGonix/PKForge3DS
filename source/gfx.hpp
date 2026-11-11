@@ -114,6 +114,8 @@ namespace gfx
     bool icon(int species, int form, float cx, float cy, float scale = 1, u32 tint = 0, float blend = 0);
     // Front sprite (96x96) centred at (cx, cy); false when missing.
     bool front(int species, int form, bool shiny, bool female, float cx, float cy, float scale = 1);
+    // An RGBA picture (w, h up to 128), centred; key names it so its texture is made once.
+    void rgbaImage(const u8* rgba, int w, int h, float cx, float cy, u32 key, float scale = 1);
     // Cartridge art for a PKForge game-art name ("firered"); false when none.
     bool cartridge(std::string_view artName, float cx, float cy, float scale = 1);
     // A live RGB565 picture up to 400x240 (the camera's), uploaded each call and drawn at (x, y).
