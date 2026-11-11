@@ -204,10 +204,45 @@ namespace encounters
         }
     }
 
-    const std::vector<Slot>& of(const pksm::Sav& sav)
+    namespace
+    {
+        const std::vector<Slot>& ofVersion(int version);
+    }
+
+    const std::vector<Slot>& of(const pksm::Sav& sav) { return ofVersion(int(u8(sav.version()))); }
+
+    std::vector<std::string> elsewhere(const pksm::Sav& sav, u16 species)
+    {
+        static const std::pair<int, const char*> games[] = {{35, "Red"}, {36, "Blue"}, {38, "Yellow"}, {39, "Gold"},
+            {40, "Silver"}, {41, "Crystal"}, {2, "Ruby"}, {1, "Sapphire"}, {3, "Emerald"}, {4, "FireRed"},
+            {5, "LeafGreen"}, {10, "Diamond"}, {11, "Pearl"}, {12, "Platinum"}, {7, "HeartGold"}, {8, "SoulSilver"},
+            {21, "Black"}, {20, "White"}, {23, "Black 2"}, {22, "White 2"}, {24, "X"}, {25, "Y"}, {27, "Omega Ruby"},
+            {26, "Alpha Sapphire"}, {30, "Sun"}, {31, "Moon"}, {32, "Ultra Sun"}, {33, "Ultra Moon"}};
+        std::vector<std::string> out;
+        int self = int(u8(sav.version()));
+        for (auto& [version, name] : games)
+        {
+            if (version == self)
+            {
+                continue;
+            }
+            for (const Slot& s : ofVersion(version))
+            {
+                if (s.species == species)
+                {
+                    out.push_back(name);
+                    break;
+                }
+            }
+        }
+        return out;
+    }
+
+    namespace
+    {
+    const std::vector<Slot>& ofVersion(int version)
     {
         static std::map<int, std::vector<Slot>> cache;
-        int version = int(u8(sav.version()));
         auto found  = cache.find(version);
         if (found != cache.end())
         {
@@ -225,6 +260,7 @@ namespace encounters
             }
         }
         return out;
+    }
     }
 
     std::string place(const pksm::Sav& sav, const Slot& s)

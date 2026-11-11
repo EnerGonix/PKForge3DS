@@ -27,6 +27,8 @@ namespace encounters
 
     // Every wild encounter of the save's game (empty for games without a table).
     const std::vector<Slot>& of(const pksm::Sav& sav);
+    // The other games (up to Ultra Sun and Ultra Moon) where a species is found in the wild, by name.
+    std::vector<std::string> elsewhere(const pksm::Sav& sav, u16 species);
     // "Route 102", "Grass", "Lv. 4" or "Lv. 3-5", "morning/day" (Crystal), as shown.
     std::string place(const pksm::Sav& sav, const Slot& s);
     std::string kind(const pksm::Sav& sav, const Slot& s);

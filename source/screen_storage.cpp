@@ -3080,9 +3080,29 @@ namespace
                         spots.push_back({int(i), encounters::place(*sav(), e) + "  -  " + encounters::kind(*sav(), e) + "  -  " + levels,
                             ok ? "A catches one here." : "Shown only: PKForge can't make this kind legally yet."});
                     }
-                    std::string title = i18n::species(sav()->language(), pksm::Species{u16(species)}) + ": where";
-                    app::push(screens::picker(title, std::move(spots), -1, [this, s](int index)
+                    std::vector<std::string> other = encounters::elsewhere(*sav(), u16(species));
+                    if (!other.empty())
+                    {
+                        std::string list;
+                        for (auto& g : other)
                         {
+                            list += (list.empty() ? "" : ", ") + g;
+                        }
+                        spots.push_back({-1, "Also wild in: " + list, ""});
+                    }
+                    std::string title = i18n::species(sav()->language(), pksm::Species{u16(species)}) + ": where";
+                    app::push(screens::picker(title, std::move(spots), -1, [this, s, species](int index)
+                        {
+                            if (index < 0)
+                            {
+                                std::string list;
+                                for (auto& g : encounters::elsewhere(*sav(), u16(species)))
+                                {
+                                    list += (list.empty() ? "" : ", ") + g;
+                                }
+                                app::message("Also wild in", list + ".\nCatch it there and move it here through the Bank.");
+                                return;
+                            }
                             const encounters::Slot& e = encounters::of(*sav())[index];
                             if (!encounters::catchable(*sav(), e))
                             {
