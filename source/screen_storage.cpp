@@ -2165,6 +2165,15 @@ namespace
                 [this, s]()
                 {
                     std::string error;
+                    if (hovered && u16(hovered->species()))
+                    {
+                        std::string who = hovered->nickname();
+                        std::string old;
+                        files::readText("sdmc:/3ds/PKForge/wilds.txt", old);
+                        files::writeText("sdmc:/3ds/PKForge/wilds.txt",
+                            old + std::to_string(u16(hovered->species())) + "\t" + who + "\n");
+                        app::toast(who + " heads off into the Wilds. It may visit the Poképark one day.");
+                    }
                     if (s.side == Side::Bank)
                     {
                         bank.remove(s.box, s.slot, error);

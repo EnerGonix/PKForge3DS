@@ -21,7 +21,11 @@
 #include <cmath>
 #include <cstdio>
 #include <ctime>
+#include <functional>
+#include <map>
 #include <sstream>
+#include "personal/personal.hpp"
+#include "stb_image.h"
 
 using namespace gfx;
 
@@ -200,6 +204,11 @@ namespace
         float fun = 60, energy = 80; // 0-100: play raises fun, sleep restores energy
         std::string line;            // what it last said, shown on its card a while
         int lineAge = 0;
+        // ParkLife: what it is, its needs and bond (kept between visits), and how it is today.
+        bool wild = false, friendBack = false, guest = false, unwell = false;
+        bool flyer = false, ghost = false, teleporter = false, legend = false, troll = false;
+        int stay = 0, faded = 0;
+        float hunger = 70, bond = 20;
     };
 
     u32 hashOf(u32 v)
@@ -210,6 +219,160 @@ namespace
         v *= 0x846ca68b;
         return v ^ (v >> 16);
     }
+
+
+    // ---------------------------------------------------------------- the album and the credits statue
+
+    // PokeparkAlbumOverlay: one photo at a time with its date; L and R turn the pages, B closes.
+    class Album : public Screen
+    {
+    public:
+        explicit Album(std::vector<std::string> p) : photos(std::move(p)), at(int(photos.size()) - 1) { load(); }
+        bool cursorSounds() const override { return false; }
+
+        void update(Input& in) override
+        {
+            if (in.down & KEY_B)
+            {
+                app::pop();
+                return;
+            }
+            int was = at;
+            if (in.down & (KEY_L | KEY_DLEFT))
+            {
+                at = (at + int(photos.size()) - 1) % int(photos.size());
+            }
+            if (in.down & (KEY_R | KEY_DRIGHT))
+            {
+                at = (at + 1) % int(photos.size());
+            }
+            if (at != was)
+            {
+                load();
+            }
+        }
+
+        void drawTop() override
+        {
+            rect(0, 0, TOP_W, H, rgb(0, 0, 0));
+            if (!pixels.empty())
+            {
+                gfx::cameraImage(pixels.data(), 400, 240, 0, 0);
+            }
+            else
+            {
+                text(TOP_W / 2, H / 2, "This photo could not be read.", T::InkSoft, Center);
+            }
+        }
+
+        void drawBottom() override
+        {
+            housing(0, 0, BOTTOM_W, H);
+            widgets::header(BOTTOM_W, "Album", std::to_string(at + 1) + " / " + std::to_string(photos.size()));
+            panel(10, 40, BOTTOM_W - 20, 120, T::PanelFill, T::FrameEdge);
+            std::string name = files::baseName(photos[size_t(at)]);
+            // park-YYYYMMDD-HHMMSS.bmp
+            std::string when = name.size() >= 20 ? name.substr(11, 2) + "/" + name.substr(9, 2) + "/" + name.substr(5, 4) + "  " +
+                                                       name.substr(14, 2) + ":" + name.substr(16, 2)
+                                                 : name;
+            text(24, 56, "A day in the Poképark", T::Ink);
+            text(24, 80, when, T::Value);
+            wrap(24, 104, BOTTOM_W - 48, "Photos live in 3ds/PKForge/photos on the SD card.", T::InkSoft, 1, 3);
+            widgets::footer(BOTTOM_W, {{"LR", "Turn"}, {"B", "Close"}});
+        }
+
+    private:
+        std::vector<std::string> photos;
+        int at;
+        std::vector<u16> pixels;
+
+        void load()
+        {
+            pixels.clear();
+            std::vector<u8> file;
+            if (!files::read(photos[size_t(at)], file))
+            {
+                return;
+            }
+            int w = 0, h = 0, n = 0;
+            u8* rgb = stbi_load_from_memory(file.data(), int(file.size()), &w, &h, &n, 3);
+            if (!rgb)
+            {
+                return;
+            }
+            pixels.assign(400 * 240, 0);
+            for (int y = 0; y < 240 && y < h; y++)
+            {
+                for (int x = 0; x < 400 && x < w; x++)
+                {
+                    const u8* p = rgb + (y * w + x) * 3;
+                    pixels[size_t(y * 400 + x)] = u16((p[0] >> 3) << 11 | (p[1] >> 2) << 5 | (p[2] >> 3));
+                }
+            }
+            stbi_image_free(rgb);
+        }
+    };
+
+    // PokeparkCreditsOverlay: the PKForge statue's credits, rolling up under twinkling stars.
+    class Credits : public Screen
+    {
+    public:
+        bool cursorSounds() const override { return false; }
+        void update(Input& in) override
+        {
+            if (in.down & (KEY_B | KEY_A))
+            {
+                app::pop();
+                return;
+            }
+            scroll += 0.4f;
+            if (scroll > lines() * 22 + H + 40)
+            {
+                scroll = 0;
+            }
+            tick++;
+        }
+        void drawTop() override
+        {
+            rect(0, 0, TOP_W, H, rgb(8, 10, 30));
+            for (int i = 0; i < 40; i++)
+            {
+                u32 h = hashOf(u32(i) * 911u);
+                if ((tick / 8 + int(h % 13)) % 13 < 9)
+                {
+                    star(float(h % TOP_W), float((h >> 9) % H), 1.5f, rgb(255, 255, 255, 180));
+                }
+            }
+            static const char* roll[] = {"PKForge", "", "PKForge by sofianeelhor", "", "Logo, look and Poképark map",
+                "spritedmistery", "", "Save engine", "PKSM-Core by FlagBrew", "", "Legality, encounters and data",
+                "PKHeX by Kaphotics and contributors", "", "Music", "Kevin MacLeod (incompetech.com)", "",
+                "3DS port", "En3rGonix", "", "Thank you for playing!"};
+            for (int i = 0; i < int(sizeof(roll) / sizeof(roll[0])); i++)
+            {
+                float y = H + 20 + i * 22 - scroll;
+                if (y > -20 && y < H + 10)
+                {
+                    text(TOP_W / 2, y, roll[i], i == 0 ? S::ShinyGold : T::Ink, Center, i == 0 ? 2 : 1);
+                }
+            }
+        }
+        void drawBottom() override
+        {
+            housing(0, 0, BOTTOM_W, H);
+            widgets::header(BOTTOM_W, "The PKForge statue", "Credits");
+            wrap(20, 60, BOTTOM_W - 40, "A small statue in the middle of the park. Its plaque thanks everyone who made PKForge.",
+                T::Value, 1, 4);
+            widgets::footer(BOTTOM_W, {{"B", "Close"}});
+        }
+
+    private:
+        float scroll = 0;
+        int tick     = 0;
+        static int lines() { return 20; }
+    };
+
+    std::unique_ptr<Screen> parkAlbum(std::vector<std::string> photos) { return std::make_unique<Album>(std::move(photos)); }
+    std::unique_ptr<Screen> parkCredits() { return std::make_unique<Credits>(); }
 
     class Park : public Screen
     {
@@ -253,6 +416,12 @@ namespace
             day        = int(now / 86400);
             rainy      = hashOf(u32(day) * 2654435761u) % 5 == 0; // about one day in five
             chooseResidents();
+            for (Resident& r : residents)
+            {
+                lifeInit(r);
+            }
+            loadLife();
+            weatherBlock();
             placeFire();
             time_t clock = time(nullptr);
             int startHour = localtime(&clock)->tm_hour;
@@ -272,7 +441,17 @@ namespace
             }
             if (rainy)
             {
-                note("It is raining over the park today.");
+                note(storm ? "A storm is rolling over the park." : "It is raining over the park.");
+            }
+            absence();
+            if (!awayStory.empty())
+            {
+                std::string text;
+                for (auto& l : awayStory)
+                {
+                    text += l + "\n";
+                }
+                app::message("While you were away", text);
             }
             if (!residents.empty())
             {
@@ -287,6 +466,7 @@ namespace
 
         ~Park() override
         {
+            saveLife();
             audio::place(audio::Place::Menu);
             std::string out;
             for (size_t i = journal.size() > 200 ? journal.size() - 200 : 0; i < journal.size(); i++)
@@ -363,7 +543,26 @@ namespace
             }
             if (in.down & KEY_A)
             {
-                seeking ? look() : throwBall();
+                if (!sparBlock())
+                {
+                    seeking ? look() : throwBall();
+                }
+            }
+            if (!residents.empty() && !showJournal && in.tapped(moreX(), MORE_Y, MORE_W, MORE_H))
+            {
+                moreMenu();
+            }
+            // A long touch on the selected one's card: a head pat.
+            if (!residents.empty() && !showJournal && in.touching && in.inside(MINI_X + mapW / 8 + 10, MINI_Y, 120, 60))
+            {
+                if (++patHold == 40)
+                {
+                    pat(residents[selected]);
+                }
+            }
+            else
+            {
+                patHold = 0;
             }
             if (!residents.empty() && ((in.down & KEY_X) || (!showJournal && in.tapped(playX(), BUTTON_Y, BUTTON_W, BUTTON_H))))
             {
@@ -406,7 +605,9 @@ namespace
             for (Resident& r : residents)
             {
                 live(r);
+                daycareTick(r);
             }
+            lifeTick();
             if (ball)
             {
                 if (++ballAge == BALL_FLIGHT)
@@ -465,6 +666,10 @@ namespace
                 {
                     continue; // out of sight until the view comes close
                 }
+                if (r->faded > 0 && (r->faded > 30 || (tick / 3) % 2))
+                {
+                    continue; // a ghost drifting about unseen
+                }
                 float lift = 0, side = 0;
                 if (r->act == Act::Walk || r->act == Act::Come)
                 {
@@ -482,8 +687,16 @@ namespace
                 {
                     circle(sx, sy - 1, 9, alpha(T::Cyan, 90));
                 }
+                if (r->flyer && r->act == Act::Walk && std::hypot(r->tx - r->x, r->ty - r->y) > 30)
+                {
+                    lift += 16; // flying over everything, its shadow on the ground
+                }
                 rect(sx - 7, sy - 2, 14, 3, rgb(0, 0, 0, 60)); // its shadow
-                icon(r->species, r->form, sx + side, sy - 12 - lift, 1);
+                icon(r->species, r->form, sx + side, sy - 12 - lift, 1, r->unwell ? rgb(120, 140, 200) : 0, r->unwell ? 0.3f : 0);
+                if (r->wild)
+                {
+                    rect(sx - 2, sy + 2, 4, 2, r->friendBack ? S::ShinyGold : rgb(120, 220, 120));
+                }
                 if (r->shiny && (tick + r->phase) % 120 < 10)
                 {
                     star(sx + 10, sy - 26 - lift, 3, S::ShinyGold);
@@ -600,6 +813,21 @@ namespace
                 widgets::buttonFace(callX(), BUTTON_Y, BUTTON_W, BUTTON_H, "Call", false, false);
                 widgets::buttonFace(feedX(), BUTTON_Y, BUTTON_W, BUTTON_H, "Feed", false, false);
                 widgets::buttonFace(seekX(), BUTTON_Y, BUTTON_W, BUTTON_H, seeking ? "Stop" : "Seek", seeking, false);
+                widgets::buttonFace(moreX(), MORE_Y, MORE_W, MORE_H, "More", false, false);
+                // Hunger and bond (ParkCare): five hearts.
+                int hearts = int(r.bond / 20 + 0.5f);
+                for (int k = 0; k < 5; k++)
+                {
+                    circle(moreX() + 5 + k * 8, MORE_Y + 26, 3, k < hearts ? S::GiftPink : T::Void);
+                }
+                if (r.hunger < 25)
+                {
+                    text(moreX(), MORE_Y + 32, "Hungry", S::Illegal, Left, 0.7f);
+                }
+                else if (r.guest)
+                {
+                    text(moreX(), MORE_Y + 32, "Daycare", T::SubInk, Left, 0.7f);
+                }
             }
             if (seeking)
             {
@@ -642,6 +870,31 @@ namespace
         int callX() const { return playX() + BUTTON_W + 4; }
         int feedX() const { return callX() + BUTTON_W + 4; }
         int seekX() const { return feedX() + BUTTON_W + 4; }
+        // "More" sits in the card's top right corner, the hearts under it.
+        int moreX() const { return BOTTOM_W - 6 - 46; }
+        static constexpr int MORE_Y = MINI_Y + 2, MORE_W = 42, MORE_H = 18;
+        int patHold = 0;
+
+        void moreMenu()
+        {
+            std::vector<app::Option> o;
+            Resident& r = residents[selected];
+            o.push_back({"Dig for treasure with " + r.name, [this]() { startGame(1); }, "It digs a while; who knows what turns up."});
+            o.push_back({"Brush " + r.name + "'s coat", [this]() { startGame(2); }, "Builds the bond."});
+            o.push_back({"Spar with " + r.name, [this]() { startGame(3); }, "Press A right as the strike lands."});
+            o.push_back({"Pat " + r.name, [this]() { pat(residents[selected]); }, "Or hold its card a moment."});
+            o.push_back({r.guest ? "Take " + r.name + " back from the daycare" : "Leave " + r.name + " at the daycare",
+                [this]() { daycareToggle(residents[selected]); }, "Blissey and Audino look after the guests."});
+            o.push_back({"Today's goals", [this]() { goalsMenu(); }, "Three a day; all three throw a party."});
+            o.push_back({"Chronicle", [this]() { chronicleMenu(); }, "Everything the park remembers."});
+            o.push_back({"Treasures", [this]() { treasuresMenu(); }, ""});
+            o.push_back({"Album", [this]() { album(); }, "The photos you took here."});
+            o.push_back({"The PKForge statue", [this]() { credits(); }, "Its plaque: the credits."});
+            o.push_back({"Close", []() {}});
+            app::menu("Poképark", std::move(o));
+        }
+
+#include "park_life.inc"
 
         bool isLand(int px, int py) const
         {
@@ -957,6 +1210,8 @@ namespace
                     chasers++;
                 }
             }
+            count("balls");
+            countDay("balls");
             note(chasers ? "You threw a ball; " + std::to_string(chasers) + " ran after it." : "You threw a ball; nobody was awake to chase it.");
         }
 
@@ -1027,6 +1282,7 @@ namespace
             loser.energy -= 10;
             talk(winner, "won");
             note(winner.name + " won the race against " + loser.name + ".");
+            count("races");
             audio::sfx(audio::Sfx::Win);
             racer1 = racer2 = -1;
         }
@@ -1134,6 +1390,8 @@ namespace
             int seconds = (tick - seekStart) / 60;
             if (won)
             {
+                count("seeks-won");
+                countDay("seeks-won");
                 note("Hide and seek: found everyone in " + std::to_string(seconds / 60) + " min " +
                      std::to_string(seconds % 60) + " s.");
             }
@@ -1275,6 +1533,9 @@ namespace
             r.timer = 120;
             say(r, rand() % 2 ? Emote::Heart : Emote::Note);
             note("You played with " + r.name + ".");
+            r.bond = std::min(100.0f, r.bond + 1);
+            count("plays");
+            countDay("plays");
         }
 
         // Feeding, as the original's: a berry for the chosen one, more energy and a little fun.
@@ -1291,6 +1552,10 @@ namespace
             audio::sfx(audio::Sfx::Sparkle);
             audio::cry(r.species, 0.7f);
             note("You gave " + r.name + " a berry.");
+            r.hunger = std::min(100.0f, r.hunger + 45);
+            r.bond   = std::min(100.0f, r.bond + 1);
+            count("berries");
+            countDay("berries");
         }
 
         // Photos, as the original's: the park as it is now, saved in sdmc:/3ds/PKForge/photos.
@@ -1302,6 +1567,8 @@ namespace
             audio::sfx(audio::Sfx::Found);
             app::toast("Photo saved in 3ds/PKForge/photos.");
             note("You took a photo.");
+            count("photos");
+            countDay("photos");
         }
 
         void call(Resident& r)

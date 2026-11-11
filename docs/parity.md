@@ -34,8 +34,8 @@ Moon) and GameCube Colosseum/XD; Let's Go and the Switch games are out of scope.
 | HaX, Hardcore, themes, Showdown, QR, hex editor | hax, themes, showdown, qr, screen_hex | done |
 | Music menu: play/pause, skip, per-place music, order, autostart, library | Settings > Sound | done (library = files copied to the SD) |
 | Poképark: map, residents, emotes, ball, races, campfire, journal, hide and seek, feed, photo | screen_park | done |
-| Poképark ParkLife: evolution, Snorlax, trolls, visitors, powers, quirks, habits, respect, chronicle, evenings, games, daycare, talk, lore, goals, absence | - | **to do** |
-| Poképark album, credits statue, Wilds (release and return), treasures | - | **to do** |
+| Poképark ParkLife: evolution, Snorlax, trolls, visitors, powers, quirks, habits, respect, chronicle, evenings, games, daycare, talk, lore, goals, absence | screen_park + park_life.inc | done (this port's compact version of each system) |
+| Poképark album, credits statue, Wilds (release and return), treasures | Poképark > More | done |
 | ROM hacks: Pokémon Unbound, Radical Red (CFRU), Gold & Silver Chronicles | romhack.cpp (+ tools/romhacks.py tables): boxes, party, editor, Bank (PK3RR/PK3UB/PK3GSC like Android), cross-hack moves | done (bag and dex not edited, as the original leaves most) |
 | ROM hack: Luminescent Platinum | - | out of scope (Switch BDSP hack) |
 | Colosseum / XD (.gci) | gamecube.cpp (decrypt, checksums, CK3/XK3 as PK3, Shadow data kept) | done (bag and Strategy Memo not edited) |
