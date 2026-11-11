@@ -53,6 +53,8 @@ namespace encounters
             static const u8 old3[]  = {0, 70, 100};
             static const u8 good3[] = {0, 60, 80, 100};
             static const u8 super3[] = {0, 40, 70, 95, 99, 100}; // Gen 3 Super Rod
+            static const u8 super4[] = {0, 40, 80, 95, 99, 100}; // Gen 4 Good and Super Rod (and HGSS Old Rod)
+            static const u8 smash4[] = {0, 80, 100};             // HGSS Rock Smash
             const u8* t = nullptr;
             int n       = 0;
             if (gen == 3)
@@ -64,6 +66,7 @@ namespace encounters
                     case 2: t = old3, n = 2; break;
                     case 3: t = good3, n = 3; break;
                     case 4: t = super3, n = 5; break;
+                    case 5: t = surf, n = 5; break; // Rock Smash uses the Surf table
                     case 6:
                     case 7: lo = 0, hi = 49; return slot == 0;
                     default: return false;
@@ -71,11 +74,14 @@ namespace encounters
             }
             else if (gen == 4)
             {
-                (void)hgss;
                 switch (type)
                 {
                     case 0: t = grass, n = 12; break;
                     case 1: t = surf, n = 5; break;
+                    case 2: t = hgss ? super4 : surf, n = 5; break;
+                    case 3:
+                    case 4: t = super4, n = 5; break;
+                    case 5: t = smash4, n = 2; break;
                     default: return false;
                 }
             }
@@ -115,8 +121,39 @@ namespace encounters
             bool levelRoll = gen == 3 || s.type != 0; // Gen 4: grass slots have a fixed level
             u16 tid = pk.TID(), sid = pk.SID();
             Lcrng r{random32()};
+            // Some kinds have to trigger first, judged from the current state (PKHeX CheckEncounterActivation,
+            // no lead): Gen 3 Rock Smash, Gen 4 fishing bites, HGSS Rock Smash.
+            auto triggers = [&](u32 seed)
+            {
+                u32 u16v = seed >> 16;
+                if (gen == 3)
+                {
+                    if (s.type != 5)
+                    {
+                        return true;
+                    }
+                    u32 rate = s.rate * 16u;
+                    rate += rate >> 1; // the White Flute, as PKHeX assumes
+                    return u16v % 2880 < rate;
+                }
+                if (s.type >= 2 && s.type <= 4)
+                {
+                    u32 rod = s.type == 2 ? 25 : s.type == 3 ? 50 : 75;
+                    return hgss ? u16v % 100 < rod + 50 : u16v / 656 < rod;
+                }
+                if (s.type == 5)
+                {
+                    return u16v % 100 < s.rate;
+                }
+                return true;
+            };
             for (;;)
             {
+                if (!triggers(r.seed))
+                {
+                    r.next16();
+                    continue;
+                }
                 u32 esv = gen == 4 && !hgss ? r.next16() / 656u : r.next16() % 100;
                 if (int(esv) < lo || int(esv) > hi)
                 {
@@ -166,13 +203,17 @@ namespace encounters
         }
 
         // Generation 5 (PKHeX MonochromeRNG.Generate, wild): nature apart, ability in bit 16, the wild xor.
-        void monochrome(pksm::PKX& pk)
+        void monochrome(pksm::PKX& pk, bool grotto)
         {
             u16 tid = pk.TID(), sid = pk.SID();
             u32 pid = random32();
             if (shiny3(tid, sid, pid))
             {
                 pid ^= 0x10000000;
+            }
+            if (grotto)
+            {
+                pid &= ~0x10000u; // a single ability (the hidden one) forces bit 16 to 0
             }
             if (((pid >> 31) ^ (pid & 1) ^ ((tid ^ sid) & 1)) != 0)
             {
@@ -181,7 +222,9 @@ namespace encounters
             // Gender and ability-number setters pick a new PID: everything first, the PID last.
             pk.nature(pksm::Nature{u8(rand() % 25)});
             pk.gender(pksm::PKX::genderFromRatio(pid, pk.genderType()));
-            pk.ability(pk.abilities(u8((pid >> 16) & 1)));
+            u8 index = grotto ? 2 : u8((pid >> 16) & 1);
+            pk.ability(pk.abilities(index));
+            static_cast<pksm::PK5&>(pk).hiddenAbility(grotto);
             pk.PID(pid);
             randomIVs(pk);
         }
@@ -254,10 +297,10 @@ namespace encounters
         if (files::read("romfs:/enc/" + std::to_string(version) + ".bin", data) && data.size() >= 2)
         {
             u16 n = rd16(data.data());
-            for (u16 i = 0; i < n && 2 + (i + 1) * 11 <= int(data.size()); i++)
+            for (u16 i = 0; i < n && 2 + (i + 1) * 12 <= int(data.size()); i++)
             {
-                const u8* p = data.data() + 2 + i * 11;
-                out.push_back({rd16(p), p[2], p[3], p[4], p[5], rd16(p + 6), p[8], p[9], p[10]});
+                const u8* p = data.data() + 2 + i * 12;
+                out.push_back({rd16(p), p[2], p[3], p[4], p[5], rd16(p + 6), p[8], p[9], p[10], p[11]});
             }
         }
         return out;
@@ -353,9 +396,18 @@ namespace encounters
         {
             case 1: return true;
             case 2: return s.type <= 5; // headbutt trees depend on the trainer ID, the Bug Contest on its ball
-            case 3: return s.species != 201 && (s.type <= 4 || s.type == 6 || s.type == 7);
-            case 4: return s.species != 201 && s.type <= 1;
-            case 5: return s.type != 5;
+            case 3: return s.species != 201 && s.type <= 7;
+            case 4:
+            {
+                u8 v      = u8(sav.version());
+                bool hgss = v == 7 || v == 8;
+                if (s.species == 201 || (s.type >= 2 && s.type <= 4 && s.rate == 255)) // Unown; Coronet's Feebas
+                {
+                    return false;
+                }
+                return s.type <= 4 || (hgss && s.type == 5);
+            }
+            case 5: return true;
             case 6: return s.type != 8 && s.species != 666; // Vivillon's pattern follows the console's region
             default: return true;
         }
@@ -488,7 +540,7 @@ namespace encounters
                     static_cast<pksm::PK4&>(pk).encounterType(s.tile);
                 }
                 break;
-            case 5: monochrome(pk); break;
+            case 5: monochrome(pk, s.type == 5); break;
             default:
                 modern(pk);
                 if (gen == 6)

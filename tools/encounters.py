@@ -6,10 +6,11 @@ PKHeX.Core/Resources/legality/wild/GenN/encounter_<game>.pkl, and the met locati
 PKHeX.Core/Resources/text/locations/genN/text_<games>_00000_en.txt (line = location id).
 
 Writes romfs/enc/<version>.bin (version = the save's game version, as PKSM-Core numbers it) and
-romfs/enc/loc<gen>.txt. After a u16 count, 11-byte records:
+romfs/enc/loc<gen>.txt. After a u16 count, 12-byte records:
     u16 species, u8 form, u8 min level, u8 max level, u8 type, u16 location, u8 time (Gold/Silver/Crystal),
     u8 slot number (Gen 1-4: the game's slot, which the RNG methods need), u8 ground tile (Gen 4: the
-    lowest tile the area allows, which PK4 stores as its encounter type).
+    lowest tile the area allows, which PK4 stores as its encounter type), u8 area rate (Gen 3-4: the Rock Smash
+    proc and the Coronet Feebas sentinel 255 need it).
 
 Usage: encounters.py <PKHeX checkout> <out romfs dir>"""
 import os
@@ -52,7 +53,7 @@ def entries(path):
 
 
 def areas(gen, area, swarm=False):
-    """Yield (species, form, min, max, type, location, time, slot, tile) for one area."""
+    """Yield (species, form, min, max, type, location, time, slot, tile, rate) for one area."""
     if gen in (1, 2):
         loc, time, typ = area[0], area[1], area[2]
         data = area[4:]
@@ -62,7 +63,7 @@ def areas(gen, area, swarm=False):
         for i in range(0, len(data) - 3, 4):
             sp, slot, lo, hi = data[i:i + 4]
             if sp:
-                yield sp, 0, lo, hi, typ, loc, time if gen == 2 else 0, slot, 0
+                yield sp, 0, lo, hi, typ, loc, time if gen == 2 else 0, slot, 0, area[3]
     elif gen in (3, 4):
         loc, typ = area[0], area[2]
         if swarm:
@@ -75,14 +76,14 @@ def areas(gen, area, swarm=False):
         for i in range(0, len(data) - 9, 10):
             sp, form, slot, lo, hi = struct.unpack_from('<HBBBB', data, i)
             if sp:
-                yield sp, form, lo, hi, typ, loc, 0, slot, tile
+                yield sp, form, lo, hi, typ, loc, 0, slot, tile, area[3]
     else:
         loc, typ = struct.unpack_from('<HB', area, 0)
         for i in range(4, len(area) - 3, 4):
             raw, lo, hi = struct.unpack_from('<HBB', area, i)
             sp, form = raw & 0x7FF, raw >> 11
             if sp:
-                yield sp, form, lo, hi, typ, loc, 0, 0, 0
+                yield sp, form, lo, hi, typ, loc, 0, 0, 0, 0
 
 
 def main():
@@ -102,8 +103,8 @@ def main():
         rows = sorted(rows, key=lambda r: (r[0], r[5], r[4], r[2]))
         with open(os.path.join(enc, '%d.bin' % version), 'wb') as out:
             out.write(struct.pack('<H', len(rows)))
-            for sp, form, lo, hi, typ, loc, time, slot, tile in rows:
-                out.write(struct.pack('<HBBBBHBBB', sp, form, lo, hi, typ, loc, time, slot, tile))
+            for sp, form, lo, hi, typ, loc, time, slot, tile, rate in rows:
+                out.write(struct.pack('<HBBBBHBBBB', sp, form, lo, hi, typ, loc, time, slot, tile, rate))
         total += len(rows)
         print(version, gen, len(rows))
     print('records', total)

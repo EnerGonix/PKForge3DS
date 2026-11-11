@@ -6,8 +6,8 @@
 //  - Generation 4: Method J (Diamond, Pearl, Platinum) and Method K (HeartGold, SoulSilver), with the ground tile
 //  - Generation 5: the Monochrome PID rules (ability bit 16, the wild xor), nature apart
 //  - Generations 1, 2, 6, 7: random DVs/PID, as PKHeX does
-// Encounter types that need an RNG proc PKForge does not model (Rock Smash, fishing in Gen 4, honey trees,
-// Safari, Bug Contest, headbutt, hidden grottos, Friend Safari) are listed but not caught.
+// Not made (listed only): Gen 4 honey trees, Safari and Bug Contest, headbutt trees (they depend on the
+// trainer ID), Coronet's Feebas tiles, Gen 3/4 Unown, X/Y's Vivillon (its pattern follows the region).
 #pragma once
 
 #include "pkx/PKX.hpp"
@@ -22,7 +22,7 @@ namespace encounters
         u16 species = 0;
         u8 form = 0, min = 0, max = 0, type = 0;
         u16 location = 0;
-        u8 time = 0, number = 0, tile = 0;
+        u8 time = 0, number = 0, tile = 0, rate = 0;
     };
 
     // Every wild encounter of the save's game (empty for games without a table).
