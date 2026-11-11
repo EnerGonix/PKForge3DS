@@ -1,4 +1,5 @@
 #include "saves.hpp"
+#include "container.hpp"
 #include "app.hpp"
 #include "files.hpp"
 #include "input.hpp"
@@ -344,8 +345,10 @@ namespace saves
         return true;
     }
 
-    bool describeBytes(const std::vector<u8>& bytes, SaveRef& out)
+    bool describeBytes(const std::vector<u8>& file, SaveRef& out)
     {
+        std::vector<u8> bytes;
+        container::unwrap(file, bytes);
         if (bytes.empty())
         {
             return false;
@@ -512,6 +515,14 @@ std::unique_ptr<OpenSave> OpenSave::open(const SaveRef& ref, std::string& error)
     }
     auto out  = std::make_unique<OpenSave>();
     out->ref  = ref;
+    {
+        std::vector<u8> inner;
+        if (!ref.isTitle() && container::unwrap(bytes, inner))
+        {
+            out->container = bytes;
+            bytes.swap(inner);
+        }
+    }
     out->size = bytes.size();
     out->data = std::shared_ptr<u8[]>(new u8[bytes.size()]);
     memcpy(out->data.get(), bytes.data(), bytes.size());
@@ -552,7 +563,25 @@ bool OpenSave::write(std::string& error)
     }
     sav->finishEditing();
     std::string failure;
-    bool ok = ref.isTitle() ? titles::write(ref, data.get(), size, failure) : files::write(ref.path, data.get(), size);
+    bool ok;
+    if (ref.isTitle())
+    {
+        ok = titles::write(ref, data.get(), size, failure);
+    }
+    else if (!container.empty())
+    {
+        // The wrapper the file came in (RetroArch compression, chip padding, an RTC footer) goes back on.
+        std::vector<u8> file = container::rewrap(data.get(), size, container);
+        ok = files::write(ref.path, file.data(), file.size());
+        if (ok)
+        {
+            container = file;
+        }
+    }
+    else
+    {
+        ok = files::write(ref.path, data.get(), size);
+    }
     sav->beginEditing();
     if (!ok)
     {

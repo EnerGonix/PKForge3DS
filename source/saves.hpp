@@ -50,6 +50,7 @@ class OpenSave
 public:
     SaveRef ref;
     std::shared_ptr<u8[]> data;
+    std::vector<u8> container; // the file as read, when a wrapper (RetroArch, padding) surrounds the save
     u32 size = 0;
     std::unique_ptr<pksm::Sav> sav;
     bool dirty = false;
