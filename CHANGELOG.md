@@ -7,11 +7,18 @@ release tags are `3ds-vX.Y.Z` (the plain `vX.Y.Z` tags in this fork belong to th
 
 ### Added
 - **Catch in the wild** (X on an empty box slot): every wild encounter of the open game, Generations 1 to 7,
-  from PKHeX's tables (place, kind, levels, time of day in Crystal); pick one and the Pokémon is made the way
-  the game makes it, so PKHeX accepts it: Method H in Generation 3, Methods J/K with the ground tile in
-  Generation 4, the Monochrome PID rules in Generation 5, and region and memory data in Generation 6. Kinds
-  that need an RNG step PKForge does not model yet (Rock Smash, Gen 4 fishing and honey trees, Safari, Bug
-  Contest, headbutt trees, hidden grottos, Friend Safari) are listed but not caught.
+  from PKHeX's tables (place, kind, levels, time of day in Crystal), plus its **static and gift encounters**
+  (legendaries, starters, fossils, gifts), and the other games where the species is wild. Pick one and the
+  Pokémon is made the way the game makes it, so PKHeX accepts it: Method H in Generation 3 (with the Rock
+  Smash check), Methods J/K in Generation 4 (ground tile, fishing bite check), Method 1 for Gen 3/4 statics,
+  the Monochrome PID rules in Generation 5 (Hidden Grottos with their hidden ability), perfect IVs, locks,
+  relearn moves, region and memory data in Generations 6 and 7. Honey trees, Safari, the Bug Contest,
+  headbutt trees and in-game trades are listed or left out for now.
+- **Restore points** in the save's START menu: put back the save as it was before an earlier write (what it
+  holds now is kept as a new restore point first).
+- **Undo changes**: back to the save as it was opened or last written, Bank moves included.
+- **All boxes**: every box of the save or the Bank at a glance (how full, who is in it); a pick opens it.
+- **Day Care in Gold, Silver and Crystal** (from PKHeX's layout; not tested on a real save yet).
 
 ### Fixed
 - **Updates that stopped half-way**: a dropped or stalled connection now resumes where it stopped (HTTP
