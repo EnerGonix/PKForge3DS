@@ -32,7 +32,7 @@ Moon) and GameCube Colosseum/XD; Let's Go and the Switch games are out of scope.
 | Trainer card, trainer profiles, Bag, presets | screen_trainer, screen_bag, profiles | done |
 | Restore points (BackupHistoryPage), undo | saves | done |
 | HaX, Hardcore, themes, Showdown, QR, hex editor | hax, themes, showdown, qr, screen_hex | done |
-| Music menu: play/pause, skip, per-place music, library | audio (Sound menu) | partly (**music menu to do**) |
+| Music menu: play/pause, skip, per-place music, order, autostart, library | Settings > Sound | done (library = files copied to the SD) |
 | Poképark: map, residents, emotes, ball, races, campfire, journal, hide and seek, feed, photo | screen_park | done |
 | Poképark ParkLife: evolution, Snorlax, trolls, visitors, powers, quirks, habits, respect, chronicle, evenings, games, daycare, talk, lore, goals, absence | - | **to do** |
 | Poképark album, credits statue, Wilds (release and return), treasures | - | **to do** |

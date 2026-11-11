@@ -9,6 +9,8 @@
 #pragma once
 
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace audio
 {
@@ -51,4 +53,18 @@ namespace audio
     void effectsOn(bool on);
     // What is playing now, or why there is no sound.
     std::string status();
+
+    // The music menu (the original's MusicMenu): play/pause, skip, order, autostart, what each place plays
+    // ("" every track, "same" as the menus, "silence", or a track's path) and the library of every track.
+    bool paused();
+    void pause(bool on);
+    void skip();
+    bool shuffle();
+    void shuffle(bool on);
+    bool autostart();
+    void autostart(bool on);
+    std::string choice(Place p);
+    void choice(Place p, const std::string& value);
+    std::vector<std::pair<std::string, std::string>> library(); // path, title
+    std::string libraryFolder();
 }

@@ -3674,11 +3674,85 @@ namespace
 
 namespace screens
 {
+    // What a place plays, as the original's music menu: every track, one track, the menus' music, or silence.
+    void placeMusic(audio::Place place, const std::string& title)
+    {
+        auto lib = std::make_shared<std::vector<std::pair<std::string, std::string>>>(audio::library());
+        std::vector<screens::PickItem> items{{-1, "All tracks", "The whole library."}};
+        if (place == audio::Place::ParkDay || place == audio::Place::ParkNight)
+        {
+            items.push_back({-2, "Same as menus", "Keeps the menus' music playing, without a cut."});
+        }
+        items.push_back({-3, "Silence", ""});
+        int current = -1;
+        std::string chosen = audio::choice(place);
+        current = chosen == "same" ? -2 : chosen == "silence" ? -3 : -1;
+        for (int i = 0; i < int(lib->size()); i++)
+        {
+            items.push_back({i, (*lib)[i].second, ""});
+            if ((*lib)[i].first == chosen)
+            {
+                current = i;
+            }
+        }
+        app::push(screens::picker(title, std::move(items), current, [place, lib](int id)
+            {
+                audio::choice(place, id == -1 ? "" : id == -2 ? "same" : id == -3 ? "silence" : (*lib)[id].first);
+                soundMenu();
+            }));
+    }
+
     void soundMenu()
     {
         std::vector<app::Option> s;
-        s.push_back({audio::musicOn() ? "Music: on" : "Music: off", []() { audio::musicOn(!audio::musicOn()); },
+        s.push_back({audio::musicOn() ? "Music: on" : "Music: off", []() { audio::musicOn(!audio::musicOn()); soundMenu(); },
             audio::status()});
+        if (audio::musicOn())
+        {
+            s.push_back({audio::paused() ? "Play" : "Pause", []() { audio::pause(!audio::paused()); soundMenu(); }, audio::status()});
+            s.push_back({"Skip to next track", []() { audio::skip(); soundMenu(); }, ""});
+        }
+        auto name = [](audio::Place p)
+        {
+            std::string c = audio::choice(p);
+            if (c.empty())
+            {
+                return std::string("All tracks");
+            }
+            if (c == "same")
+            {
+                return std::string("Same as menus");
+            }
+            if (c == "silence")
+            {
+                return std::string("Silence");
+            }
+            for (auto& [path, title] : audio::library())
+            {
+                if (path == c)
+                {
+                    return title;
+                }
+            }
+            return files::baseName(c);
+        };
+        s.push_back({"Menus: " + name(audio::Place::Menu), []() { placeMusic(audio::Place::Menu, "Menus"); },
+            "Plays everywhere in PKForge outside the Poképark."});
+        s.push_back({"Park by day: " + name(audio::Place::ParkDay), []() { placeMusic(audio::Place::ParkDay, "Park by day"); },
+            "Plays in the Poképark in the morning and the afternoon."});
+        s.push_back({"Park by night: " + name(audio::Place::ParkNight), []() { placeMusic(audio::Place::ParkNight, "Park by night"); },
+            "Plays in the Poképark in the evening and at night."});
+        s.push_back({std::string("Order: ") + (audio::shuffle() ? "Shuffle" : "In order"),
+            []() { audio::shuffle(!audio::shuffle()); soundMenu(); }, "Play the tracks in order or shuffled."});
+        s.push_back({std::string("Autostart: ") + (audio::autostart() ? "ON" : "OFF"),
+            []() { audio::autostart(!audio::autostart()); soundMenu(); }, "ON starts the music when PKForge opens."});
+        s.push_back({"Library: " + std::to_string(audio::library().size()) + " track(s)", []()
+            {
+                app::message("Music library", "Every track PKForge has, and your own: copy MP3, OGG or WAV files into " +
+                                                  audio::libraryFolder().substr(5) + " on the SD card (or a place's own folder "
+                                                  "in 3ds/PKForge/music) and they join the library.");
+            },
+            "Add your own files on the SD card."});
         s.push_back({audio::effectsOn() ? "Sound effects and cries: on" : "Sound effects and cries: off",
             []() { audio::effectsOn(!audio::effectsOn()); },
             "Your own music in 3ds/PKForge/music/{title,menu,park-day,park-night}; your own cries in "

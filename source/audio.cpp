@@ -217,6 +217,92 @@ namespace audio
             return std::string(CACHE) + "/" + files::baseName(track) + ".32k.pcm";
         }
 
+        // ---------------------------------------------------------------- the music menu's settings (the
+        // original's MusicMenu): per place all tracks / one track / same as menus / silence, order, autostart.
+        constexpr const char* MUSIC_SETTINGS = "sdmc:/3ds/PKForge/music.txt";
+        constexpr const char* LIBRARY        = "sdmc:/3ds/PKForge/music/library";
+        std::string choiceOf[4];            // "" every track, "same", "silence", or one track's path
+        bool shuffleOn   = false;
+        bool autostartOn = true;
+        std::atomic<bool> pausedFlag{false};
+
+        const char* placeKey(int p) { return p == 0 ? "title" : p == 1 ? "menu" : p == 2 ? "park-day" : "park-night"; }
+
+        void loadMusicSettings()
+        {
+            std::string text;
+            if (!files::readText(MUSIC_SETTINGS, text))
+            {
+                return;
+            }
+            size_t a = 0;
+            while (a < text.size())
+            {
+                size_t b = text.find('\n', a);
+                std::string line = text.substr(a, b == std::string::npos ? std::string::npos : b - a);
+                a = b == std::string::npos ? text.size() : b + 1;
+                size_t eq = line.find('=');
+                if (eq == std::string::npos)
+                {
+                    continue;
+                }
+                std::string k = line.substr(0, eq), v = line.substr(eq + 1);
+                if (k == "order")
+                {
+                    shuffleOn = v == "shuffle";
+                }
+                else if (k == "autostart")
+                {
+                    autostartOn = v != "0";
+                }
+                for (int p = 0; p < 4; p++)
+                {
+                    if (k == placeKey(p))
+                    {
+                        choiceOf[p] = v;
+                    }
+                }
+            }
+        }
+
+        void saveMusicSettings()
+        {
+            std::string out = std::string("order=") + (shuffleOn ? "shuffle" : "in-order") + "\nautostart=" +
+                              (autostartOn ? "1" : "0") + "\n";
+            for (int p = 0; p < 4; p++)
+            {
+                out += std::string(placeKey(p)) + "=" + choiceOf[p] + "\n";
+            }
+            files::writeText(MUSIC_SETTINGS, out);
+        }
+
+        bool isAudioFile(const std::string& name)
+        {
+            std::string low = files::lower(name);
+            for (const char* ext : {".mp3", ".ogg", ".wav"})
+            {
+                if (low.size() > 4 && low.compare(low.size() - 4, 4, ext) == 0)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        std::vector<std::string> folderTracks(const std::string& dir)
+        {
+            std::vector<std::string> out;
+            files::list(dir, [&](const std::string& name, bool isDir, u64)
+                {
+                    if (!isDir && isAudioFile(name))
+                    {
+                        out.push_back(dir + "/" + name);
+                    }
+                });
+            std::sort(out.begin(), out.end());
+            return out;
+        }
+
         Thread converter = nullptr;
 
         void convertThread(void*)
@@ -319,8 +405,9 @@ namespace audio
         LightLock lock;
         Place current = Place::Menu, wanted = Place::Menu;
         std::unique_ptr<Source> source;
-        std::vector<std::string> playlist;
-        int track = 0, builtIn = 0; // next of the user's tracks, next of the build's
+        std::vector<std::string> playlist; // the place's tracks, the user's first, then the build's
+        bool silenceHere = false;
+        int track = 0;
         ndspWaveBuf waves[BUFFERS];
         s16* pcm = nullptr; // BUFFERS x CHUNK frames x 2 channels, linear memory
         int musicChannels = 1, musicRate = RATE;
@@ -331,55 +418,76 @@ namespace audio
                                                                                             : "sdmc:/3ds/PKForge/music/park-night";
         }
 
+        // A place's tracks as the music menu set them: every track (the place's folder, the library, the
+        // build's), one track, the menus' music, or silence.
         void loadPlaylist(Place p)
         {
             playlist.clear();
-            track   = 0;
-            builtIn = 0;
-            files::list(folderOf(p), [](const std::string& name, bool dir, u64)
-                {
-                    std::string low = files::lower(name);
-                    for (const char* ext : {".mp3", ".ogg", ".wav"})
-                    {
-                        if (!dir && low.size() > 4 && low.compare(low.size() - 4, 4, ext) == 0)
-                        {
-                            playlist.push_back(name);
-                        }
-                    }
-                });
-            std::sort(playlist.begin(), playlist.end());
+            track       = 0;
+            silenceHere = false;
+            int at      = int(p);
+            std::string choice = choiceOf[at];
+            if (choice == "same" && (p == Place::ParkDay || p == Place::ParkNight))
+            {
+                at     = int(Place::Menu);
+                choice = choiceOf[at];
+            }
+            if (choice == "silence")
+            {
+                silenceHere = true;
+                return;
+            }
+            if (!choice.empty() && choice != "same")
+            {
+                playlist.push_back(choice);
+                return;
+            }
+            for (auto& t : folderTracks(folderOf(Place(at))))
+            {
+                playlist.push_back(t);
+            }
+            for (auto& t : folderTracks(LIBRARY))
+            {
+                playlist.push_back(t);
+            }
+            for (auto& t : builtInTracks(Place(at)))
+            {
+                playlist.push_back(t);
+            }
         }
 
-        // The next thing to play at this place: the next of the user's tracks, or the built-in tune.
+        // The next track of the place (in order or shuffled); the build's own play from their converted cache.
         std::unique_ptr<Source> nextSource()
         {
+            if (silenceHere)
+            {
+                why = "Silence here.";
+                return std::make_unique<SilenceSource>();
+            }
             for (size_t tries = 0; tries < playlist.size(); tries++)
             {
-                auto f = std::make_unique<FileSource>();
-                std::string path = std::string(folderOf(current)) + "/" + playlist[track % playlist.size()];
-                track++;
-                if (f->open(path))
+                size_t i = shuffleOn && playlist.size() > 1 ? size_t(rand()) % playlist.size() : size_t(track++) % playlist.size();
+                const std::string& t = playlist[i];
+                if (t.compare(0, 6, "romfs:") == 0)
                 {
-                    why = "Playing " + playlist[(track - 1) % playlist.size()];
-                    log("music: %s (%d ch, %d Hz)", path.c_str(), f->channels, f->rate);
+                    auto pcm = std::make_unique<PcmSource>();
+                    if (pcm->open(cacheOf(t)))
+                    {
+                        why = "Playing " + trackTitle(t);
+                        log("music: %s", cacheOf(t).c_str());
+                        return pcm;
+                    }
+                    continue;
+                }
+                auto f = std::make_unique<FileSource>();
+                if (f->open(t))
+                {
+                    why = "Playing " + trackTitle(t);
+                    log("music: %s (%d ch, %d Hz)", t.c_str(), f->channels, f->rate);
                     return f;
                 }
             }
-            // The build's tracks in turn, those already converted.
-            auto tracks = builtInTracks(current);
-            for (size_t tries = 0; tries < tracks.size(); tries++)
-            {
-                const std::string& t = tracks[builtIn % tracks.size()];
-                builtIn++;
-                auto pcm = std::make_unique<PcmSource>();
-                if (pcm->open(cacheOf(t)))
-                {
-                    why = "Playing " + trackTitle(t);
-                    log("music: %s", cacheOf(t).c_str());
-                    return pcm;
-                }
-            }
-            why = "Preparing the music (first start only, a few minutes)...";
+            why = playlist.empty() ? "No music here." : "Preparing the music (first start only, a few minutes)...";
             return std::make_unique<SilenceSource>();
         }
 
@@ -412,7 +520,7 @@ namespace audio
                     musicRate     = source->rate;
                     configureMusicChannel();
                 }
-                for (int i = 0; i < BUFFERS && wantMusic; i++)
+                for (int i = 0; i < BUFFERS && wantMusic && !pausedFlag; i++)
                 {
                     ndspWaveBuf& w = waves[i];
                     if (w.status != NDSP_WBUF_DONE && w.status != NDSP_WBUF_FREE)
@@ -679,6 +787,8 @@ namespace audio
             wantMusic = text[0] == '1';
             wantFx    = text[1] == '1';
         }
+        loadMusicSettings();
+        pausedFlag = !autostartOn;
         remove(LOG);
         FILE* firm = fopen("sdmc:/3ds/dspfirm.cdc", "rb");
         long firmSize = 0;
@@ -840,5 +950,97 @@ namespace audio
         files::writeText(SETTINGS, std::string(wantMusic ? "1" : "0") + (wantFx ? "1" : "0"));
     }
 
-    std::string status() { return !ready ? why : !wantMusic ? "Music off" : why; }
+    std::string status() { return !ready ? why : !wantMusic ? "Music off" : pausedFlag ? "Paused" : why; }
+
+    bool paused() { return pausedFlag; }
+    void pause(bool on)
+    {
+        pausedFlag = on;
+        if (ready)
+        {
+            ndspChnSetPaused(MUSIC, on);
+        }
+    }
+
+    void skip()
+    {
+        if (!ready)
+        {
+            return;
+        }
+        LightLock_Lock(&lock);
+        auto next = nextSource();
+        source    = std::move(next);
+        musicChannels = source->channels;
+        musicRate     = source->rate;
+        configureMusicChannel();
+        LightLock_Unlock(&lock);
+    }
+
+    bool shuffle() { return shuffleOn; }
+    void shuffle(bool on)
+    {
+        shuffleOn = on;
+        saveMusicSettings();
+    }
+
+    bool autostart() { return autostartOn; }
+    void autostart(bool on)
+    {
+        autostartOn = on;
+        saveMusicSettings();
+    }
+
+    std::string choice(Place p) { return choiceOf[int(p)]; }
+    void choice(Place p, const std::string& value)
+    {
+        choiceOf[int(p)] = value;
+        saveMusicSettings();
+        if (ready)
+        {
+            LightLock_Lock(&lock);
+            if (current == p || (current != Place::Menu && p == Place::Menu))
+            {
+                source.reset(); // reload the place's tracks now
+            }
+            LightLock_Unlock(&lock);
+        }
+    }
+
+    std::vector<std::pair<std::string, std::string>> library()
+    {
+        std::vector<std::pair<std::string, std::string>> out;
+        for (Place p : {Place::Title, Place::Menu, Place::ParkDay, Place::ParkNight})
+        {
+            for (auto& t : builtInTracks(p))
+            {
+                out.push_back({t, trackTitle(t)});
+            }
+            for (auto& t : folderTracks(folderOf(p)))
+            {
+                out.push_back({t, trackTitle(t) + " (your file)"});
+            }
+        }
+        for (auto& t : folderTracks(LIBRARY))
+        {
+            out.push_back({t, trackTitle(t) + " (your file)"});
+        }
+        // One row per title: the title screen and the menus carry the same file.
+        std::vector<std::pair<std::string, std::string>> unique;
+        for (auto& t : out)
+        {
+            bool seen = false;
+            for (auto& u : unique)
+            {
+                seen |= u.second == t.second;
+            }
+            if (!seen)
+            {
+                unique.push_back(t);
+            }
+        }
+        return unique;
+    }
+
+    std::string libraryFolder() { return LIBRARY; }
 }
