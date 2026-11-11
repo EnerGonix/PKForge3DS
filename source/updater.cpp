@@ -754,7 +754,15 @@ namespace updater
                     case State::UpToDate:
                         line1 = "PKForge is up to date.";
                         line2 = "This is version " + std::string(PORT_VERSION) + ", the latest one.";
-                        keys  = {{"A", "Reinstall"}, {"B", "Close"}};
+                        // Reinstall only when GitHub's latest is this very version (never a downgrade).
+                        if (!job.release.url.empty() && shown(job.release.tag) == "v" + std::string(PORT_VERSION))
+                        {
+                            keys = {{"A", "Reinstall"}, {"B", "Close"}};
+                        }
+                        else
+                        {
+                            keys = {{"B", "Close"}};
+                        }
                         break;
                     case State::Available:
                         snprintf(buf, sizeof(buf), "Version %s is out (this is %s).", shown(job.release.tag).c_str(), PORT_VERSION);
