@@ -97,6 +97,7 @@ int main()
     std::optional<app::Timed> total;
     total.emplace("start-up (to the first frame)");
     ptmuInit();
+    osSetSpeedupEnable(true); // New 3DS: 804 MHz and the L2 cache (no effect on an Old 3DS)
     gfxInitDefault();
     srand(u32(time(nullptr)) ^ u32(svcGetSystemTick()));
     bool gfxOk;

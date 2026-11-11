@@ -7,6 +7,7 @@
 
 #include <3ds.h>
 #include <curl/curl.h>
+#include <sys/socket.h>
 #include <malloc.h>
 #include <algorithm>
 #include <atomic>
@@ -344,9 +345,17 @@ namespace updater
             return size * count;
         }
 
+        // A bigger receive buffer than the 3DS's default makes downloads faster (ignored if refused).
+        int onSocket(void*, curl_socket_t fd, curlsocktype)
+        {
+            int size = 0x20000;
+            setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size));
+            return CURL_SOCKOPT_OK;
+        }
+
         // One verified HTTPS GET with curl + mbedtls, following GitHub's redirects (https only). sink gets
-        // the body of the final answer.
-        bool get(const std::string& url, const std::function<bool(const u8*, u32)>& sink, std::string& error)
+        // the body of the final answer, from byte `from` on (an HTTP Range request, to resume a download).
+        bool get(const std::string& url, const std::function<bool(const u8*, u32)>& sink, std::string& error, u64 from = 0)
         {
             CURL* c = curl_easy_init();
             if (!c)
@@ -372,9 +381,14 @@ namespace updater
             curl_easy_setopt(c, CURLOPT_NOSIGNAL, 1L);
             curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, onData);
             curl_easy_setopt(c, CURLOPT_WRITEDATA, &s);
+            curl_easy_setopt(c, CURLOPT_SOCKOPTFUNCTION, onSocket);
+            if (from)
+            {
+                curl_easy_setopt(c, CURLOPT_RESUME_FROM_LARGE, curl_off_t(from));
+            }
             char detail[CURL_ERROR_SIZE] = {};
             curl_easy_setopt(c, CURLOPT_ERRORBUFFER, detail);
-            ulog("GET %s", hostOf(url).c_str());
+            ulog("GET %s from byte %llu", hostOf(url).c_str(), (unsigned long long)from);
             CURLcode res = curl_easy_perform(c);
             long status  = 0;
             curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &status);
@@ -563,32 +577,78 @@ namespace updater
                 return;
             }
             Sha256 sha;
-            u64 offset = 0;
-            std::string error;
-            bool ok = get(j->release.url, [&](const u8* d, u32 n)
+            u64 offset  = 0; // bytes received (and hashed)
+            u64 flushed = 0; // bytes handed to the installer
+            bool writeFailed = false;
+            // The installer gets the CIA in 256 KB blocks: far fewer calls than curl's 16 KB pieces.
+            std::vector<u8> block;
+            block.reserve(256 * 1024);
+            auto flush = [&]()
+            {
+                if (block.empty())
                 {
-                    if (j->stop)
-                    {
-                        return false;
-                    }
-                    u32 written = 0;
-                    Result wr   = FSFILE_Write(cia, &written, offset, d, n, 0);
-                    if (R_FAILED(wr) || written != n)
-                    {
-                        ulog("FSFILE_Write at %llu (%lu bytes): %08lX, wrote %lu", (unsigned long long)offset,
-                            (unsigned long)n, (unsigned long)wr, (unsigned long)written);
-                        return false;
-                    }
-                    sha.add(d, n);
-                    if (offset / (4 << 20) != (offset + n) / (4 << 20))
-                    {
-                        ulog("  %llu MB", (unsigned long long)((offset + n) >> 20));
-                    }
-                    offset += n;
-                    j->got = offset;
                     return true;
-                },
-                error);
+                }
+                u32 written = 0;
+                Result wr   = FSFILE_Write(cia, &written, flushed, block.data(), u32(block.size()), 0);
+                if (R_FAILED(wr) || written != block.size())
+                {
+                    ulog("FSFILE_Write at %llu (%lu bytes): %08lX, wrote %lu", (unsigned long long)flushed,
+                        (unsigned long)block.size(), (unsigned long)wr, (unsigned long)written);
+                    writeFailed = true;
+                    return false;
+                }
+                flushed += block.size();
+                block.clear();
+                return true;
+            };
+            auto sink = [&](const u8* d, u32 n)
+            {
+                if (j->stop)
+                {
+                    return false;
+                }
+                sha.add(d, n);
+                if (offset / (4 << 20) != (offset + n) / (4 << 20))
+                {
+                    ulog("  %llu MB", (unsigned long long)((offset + n) >> 20));
+                }
+                while (n)
+                {
+                    u32 take = u32(std::min<size_t>(n, block.capacity() - block.size()));
+                    block.insert(block.end(), d, d + take);
+                    d += take;
+                    n -= take;
+                    offset += take;
+                    if (block.size() == block.capacity() && !flush())
+                    {
+                        return false;
+                    }
+                }
+                j->got = offset;
+                return true;
+            };
+            std::string error;
+            bool ok = false;
+            // A dropped or stalled connection resumes where it stopped (a fresh link from GitHub each time).
+            for (int attempt = 0; attempt < 6 && !ok && !j->stop && !writeFailed; attempt++)
+            {
+                if (attempt)
+                {
+                    ulog("retry %d from %llu bytes: %s", attempt, (unsigned long long)offset, error.c_str());
+                    svcSleepThread(2000000000LL);
+                }
+                ok = get(j->release.url, sink, error, offset);
+                if (ok && j->release.size && offset < j->release.size)
+                {
+                    ok    = false; // ended early without an error: go on from here
+                    error = "The download is incomplete.";
+                }
+            }
+            if (ok)
+            {
+                ok = flush();
+            }
             std::string digest = sha.hex();
             std::string want   = j->release.digest.rfind("sha256:", 0) == 0 ? j->release.digest.substr(7) : "";
             ulog("got %llu of %llu bytes, sha256 %s, GitHub's %s", (unsigned long long)offset,
@@ -749,7 +809,9 @@ namespace updater
             {
                 s32 prio = 0x30;
                 svcGetThreadPriority(&prio, CUR_THREAD_HANDLE);
-                job.thread = threadCreate(f, &job, STACK, prio + 1, -2, false);
+                // The install runs above the screen (prio - 1): TLS and the installer get the CPU first; the
+                // screen still draws whenever the download waits for the network.
+                job.thread = threadCreate(f, &job, STACK, f == installJob ? prio - 1 : prio + 1, -2, false);
                 if (!job.thread)
                 {
                     job.error = "Could not start the download.";

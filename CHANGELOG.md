@@ -3,6 +3,17 @@
 All notable changes to PKForge for Nintendo 3DS. Versions follow [Semantic Versioning](https://semver.org);
 release tags are `3ds-vX.Y.Z` (the plain `vX.Y.Z` tags in this fork belong to the Android PKForge).
 
+## [1.1.3] - 2026-11-11
+
+### Fixed
+- **Updates that stopped half-way**: a dropped or stalled connection now resumes where it stopped (HTTP
+  Range), up to six attempts, instead of giving up.
+
+### Changed
+- **Faster updates**: the installer gets the download in 256 KB blocks, the socket has a bigger receive
+  buffer and the download runs above the screen's priority.
+- On a New 3DS, PKForge runs with the faster clock and the L2 cache.
+
 ## [1.1.2] - 2026-11-11
 
 ### Fixed
@@ -50,6 +61,7 @@ First release: a native 3DS port of [PKForge](https://github.com/sofianeelhor/PK
 with **R4 PokéLink** for the saves on an R4 (Ace3DS) flashcart, Bank, editor, Dex Autopilot, Poképark,
 Mystery Gift database, world & event editors, QR codes, themes and more.
 
+[1.1.3]: https://github.com/EnerGonix/PKForge3DS/releases/tag/3ds-v1.1.3
 [1.1.2]: https://github.com/EnerGonix/PKForge3DS/releases/tag/3ds-v1.1.2
 [1.1.1]: https://github.com/EnerGonix/PKForge3DS/releases/tag/3ds-v1.1.1
 [1.1.0]: https://github.com/EnerGonix/PKForge3DS/releases/tag/3ds-v1.1.0
