@@ -1507,12 +1507,62 @@ namespace
                                         (count ? "  " + who : std::string()), ""});
             }
             std::string title = (side == Side::Bank ? "Bank: " : "Boxes: ") + std::to_string(total) + " Pokémon";
-            app::push(screens::picker(title, std::move(items), box(), [this](int b)
+            if (side == Side::Bank && boxCount() > 1)
+            {
+                items.insert(items.begin(), {-1, "Move a box to another place...", ""});
+            }
+            auto names = std::make_shared<std::vector<screens::PickItem>>(items);
+            app::push(screens::picker(title, std::move(items), box(), [this, names](int b)
                 {
+                    if (b == -1)
+                    {
+                        // The original's Bank overview: pick a box up and put it down elsewhere; the others slide aside.
+                        std::vector<screens::PickItem> from(names->begin() + 1, names->end());
+                        app::push(screens::picker("Move which box?", std::move(from), box(), [this, names](int a)
+                            {
+                                std::vector<screens::PickItem> to(names->begin() + 1, names->end());
+                                app::push(screens::picker("Put " + boxLabel(Side::Bank, a) + " where?", std::move(to), a,
+                                    [this, a](int target) { moveBankBox(a, target); }));
+                            }));
+                        return;
+                    }
                     party = false;
                     box() = b;
                     refresh();
                 }));
+        }
+
+        // Moves Bank box a to place b, the boxes between sliding one place (names and wallpapers with them).
+        void moveBankBox(int a, int b)
+        {
+            if (a == b)
+            {
+                return;
+            }
+            if (locks::locked(ownerOf(Side::Bank), a) || locks::locked(ownerOf(Side::Bank), b))
+            {
+                app::message("Move a box", "A locked box does not move; unlock it first.");
+                return;
+            }
+            std::string error;
+            int step = a < b ? 1 : -1;
+            for (int x = a; x != b; x += step)
+            {
+                int y = x + step;
+                for (int s = 0; s < Bank::SLOTS; s++)
+                {
+                    bank.move(x, s, y, s, error);
+                }
+                std::string nx = bank.boxName(x), ny = bank.boxName(y);
+                bank.boxName(x, ny);
+                bank.boxName(y, nx);
+                std::string wx = bank.wallpaper(x), wy = bank.wallpaper(y);
+                bank.wallpaper(x, wy);
+                bank.wallpaper(y, wx);
+            }
+            bankBox = b;
+            refresh();
+            app::toast(boxLabel(Side::Bank, b) + " is now box " + std::to_string(b + 1) + ".");
         }
 
         void saveMenu()
