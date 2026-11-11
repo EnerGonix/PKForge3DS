@@ -1,4 +1,5 @@
 #include "dexedit.hpp"
+#include "romhack.hpp"
 #include "gamecube.hpp"
 #include "pkdata.hpp"
 
@@ -120,7 +121,7 @@ namespace dexedit
     bool supported(const pksm::Sav& sav)
     {
         int g = gen(sav);
-        return g >= 1 && g <= 7 && u8(sav.version()) != 42 && u8(sav.version()) != 43 && !gamecube::is(sav);
+        return g >= 1 && g <= 7 && u8(sav.version()) != 42 && u8(sav.version()) != 43 && !gamecube::is(sav) && !romhack::is(sav);
     }
 
     State get(const pksm::Sav& sav, u16 species)

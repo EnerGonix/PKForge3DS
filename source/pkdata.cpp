@@ -1,4 +1,5 @@
 #include "pkdata.hpp"
+#include "romhack.hpp"
 
 #include "enums/Ability.hpp"
 #include "enums/Ball.hpp"
@@ -119,6 +120,10 @@ namespace pkdata
 
     std::string format(const pksm::PKX& pk)
     {
+        if (romhack::is(pk))
+        {
+            return romhack::bankFormat(pk);
+        }
         std::string ext(pk.extension());
         std::string out;
         for (char c : ext)
@@ -191,6 +196,10 @@ namespace pkdata
 
     std::unique_ptr<pksm::PKX> fromBytes(const std::string& format, const u8* data, size_t size)
     {
+        if (format == "PK3RR" || format == "PK3UB" || format == "PK3GSC")
+        {
+            return romhack::fromBank(format, std::vector<u8>(data, data + size));
+        }
         std::vector<u8> copy(data, data + size);
         u8* d = copy.data();
         std::unique_ptr<pksm::PKX> pk;
@@ -256,7 +265,8 @@ namespace pkdata
         {
             c = toupper((unsigned char)c);
         }
-        static const char* known[] = {"PK1", "PK2", "PK3", "PK4", "PK5", "PK6", "PK7", "PB7", "PK8", "PA8", "PK9", "PA9"};
+        static const char* known[] = {"PK1", "PK2", "PK3", "PK4", "PK5", "PK6", "PK7", "PB7", "PK8", "PA8", "PK9", "PA9",
+            "PK3RR", "PK3UB", "PK3GSC"};
         for (auto k : known)
         {
             if (ext == k)

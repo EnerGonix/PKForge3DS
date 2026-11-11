@@ -2,6 +2,7 @@
 // Moves between the save and the Bank become final when the save is written: leaving without
 // writing takes deposits back out of the Bank, and withdrawn Pokémon stay in the Bank until then.
 #include "audio.hpp"
+#include "romhack.hpp"
 #include "bank.hpp"
 #include "encounters.hpp"
 #include "dexedit.hpp"
@@ -557,7 +558,7 @@ namespace
         void drawBottom() override
         {
             housing(0, 0, BOTTOM_W, H);
-            std::string title = save ? pkdata::game(save->ref.version) : "Bank";
+            std::string title = !save ? "Bank" : !save->ref.label.empty() ? save->ref.label : pkdata::game(save->ref.version);
             if (side == Side::Bank)
             {
                 widgets::titleBar(BOTTOM_W, "Bank", multi ? std::to_string(markedCount()) + " marked" : "Open");
@@ -1288,7 +1289,7 @@ namespace
             {
                 return true;
             }
-            if (!bank.put(*moving, to.box, to.slot, pkdata::game(save->ref.version), error))
+            if (!bank.put(*moving, to.box, to.slot, save->ref.label.empty() ? pkdata::game(save->ref.version) : save->ref.label, error))
             {
                 return false;
             }
@@ -1300,14 +1301,29 @@ namespace
 
         std::unique_ptr<pksm::PKX> intoSave(const pksm::PKX& pk, std::string& error)
         {
-            auto reason = sav()->invalidTransferReason(pk);
+            auto reason = romhack::is(*sav()) ? pksm::Sav::BadTransferReason::OKAY : sav()->invalidTransferReason(pk);
             if (reason != pksm::Sav::BadTransferReason::OKAY && !hax::on())
             {
                 error = transferProblem(reason);
                 return nullptr;
             }
             std::unique_ptr<pksm::PKX> converted;
-            if (pkdata::format(pk) == pkdata::format(*sav()->emptyPkm()))
+            if (romhack::is(*sav()))
+            {
+                // A ROM hack takes any Pokémon whose species it has; its numbers come from the hack's tables.
+                if (!romhack::canHold(*sav(), pk))
+                {
+                    error = std::string(romhack::name(romhack::hackOf(*sav()))) + " has no " + pkdata::species(u16(pk.species())) + ".";
+                    return nullptr;
+                }
+                converted = pk.clone();
+            }
+            else if (romhack::is(pk))
+            {
+                error = "A ROM hack Pokémon only moves into a ROM hack save (its numbers are the hack's own).";
+                return nullptr;
+            }
+            else if (pkdata::format(pk) == pkdata::format(*sav()->emptyPkm()))
             {
                 converted = pk.clone();
             }
@@ -1795,8 +1811,8 @@ namespace
                     o.push_back({"New Pokémon", [this]() { create(); }, "A level 5 Pokémon from this save's trainer."});
                     o.push_back({"Catch in the wild", [this]() { catchWild(); },
                         "Where a species can be caught or received in this game, and one made there as the game makes it.",
-                        !encounters::of(*sav()).empty() || !encounters::statics(*sav()).empty() ||
-                            !encounters::trades(*sav()).empty()});
+                        !romhack::is(*sav()) && (!encounters::of(*sav()).empty() || !encounters::statics(*sav()).empty() ||
+                            !encounters::trades(*sav()).empty())});
                     o.push_back({"New egg", [this]() { newEgg(); }, "An egg of any species this game has, as from the Day Care."});
                     o.push_back({"Egg factory", [this]() { eggFactory(); }, "One egg of every species, perfect IVs or shiny if you like."});
                 }

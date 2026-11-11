@@ -1,4 +1,5 @@
 #include "legality.hpp"
+#include "romhack.hpp"
 #include "learnsets.hpp"
 
 #include <algorithm>
@@ -8,6 +9,10 @@ namespace legality
     std::vector<std::string> fix(pksm::PKX& pk, const pksm::Sav& sav)
     {
         std::vector<std::string> changes;
+        if (romhack::is(pk) || romhack::is(sav))
+        {
+            return changes; // hack species and moves do not exist in the games' tables
+        }
         if (pk.egg())
         {
             return changes; // eggs keep what the game gave them until they hatch

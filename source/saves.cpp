@@ -1,4 +1,5 @@
 #include "saves.hpp"
+#include "romhack.hpp"
 #include "gamecube.hpp"
 #include "container.hpp"
 #include "app.hpp"
@@ -63,7 +64,7 @@ namespace
                 tab = strchr(at, '\t');
                 v.emplace_back(at, tab ? size_t(tab - at) : strlen(at));
             }
-            if (v.size() != 15)
+            if (v.size() != 15 && v.size() != 16)
             {
                 continue;
             }
@@ -84,6 +85,7 @@ namespace
             k.ref.badges  = atoi(v[12].c_str());
             k.ref.source  = v[13];
             k.ref.ot      = v[14];
+            k.ref.label   = v.size() > 15 ? v[15] : "";
             if (k.save && !pkdata::inScope(k.ref.gen, k.ref.version))
             {
                 k.save = false; // a Let's Go or Switch save found by an older scan: not listed any more
@@ -113,10 +115,10 @@ namespace
         for (auto& [path, k] : seen)
         {
             const SaveRef& r = k.ref;
-            fprintf(f, "%s\t%lu\t%llu\t%d\t%d\t%d\t%lu\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\n", path.c_str(),
+            fprintf(f, "%s\t%lu\t%llu\t%d\t%d\t%d\t%lu\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\n", path.c_str(),
                 (unsigned long)k.size, (unsigned long long)k.mtime, k.save ? 1 : 0, int(r.version), r.gen,
                 (unsigned long)r.tid, r.hours, r.minutes, r.seconds, r.caught, r.seen, r.badges, clean(r.source).c_str(),
-                clean(r.ot).c_str());
+                clean(r.ot).c_str(), clean(r.label).c_str());
         }
         fclose(f);
         remove(CACHE);
@@ -357,9 +359,13 @@ namespace saves
         std::shared_ptr<u8[]> data(new u8[bytes.size()]);
         memcpy(data.get(), bytes.data(), bytes.size());
         std::unique_ptr<pksm::Sav> sav;
+        sav = romhack::load(data, u32(bytes.size()));
         try
         {
-            sav = pksm::Sav::getSave(data, bytes.size());
+            if (!sav)
+            {
+                sav = pksm::Sav::getSave(data, bytes.size());
+            }
         }
         catch (...)
         {
@@ -375,6 +381,7 @@ namespace saves
         }
         out.size    = bytes.size();
         out.version = gamecube::is(*sav) ? 15 : u8(sav->version());
+        out.label   = romhack::is(*sav) ? romhack::name(romhack::hackOf(*sav)) : "";
         out.gen     = pkdata::genNumber(sav->generation());
         if (!pkdata::inScope(out.gen, out.version))
         {
@@ -531,9 +538,13 @@ std::unique_ptr<OpenSave> OpenSave::open(const SaveRef& ref, std::string& error)
     out->size = bytes.size();
     out->data = std::shared_ptr<u8[]>(new u8[bytes.size()]);
     memcpy(out->data.get(), bytes.data(), bytes.size());
+    out->sav = romhack::load(out->data, out->size);
     try
     {
-        out->sav = pksm::Sav::getSave(out->data, out->size);
+        if (!out->sav)
+        {
+            out->sav = pksm::Sav::getSave(out->data, out->size);
+        }
     }
     catch (...)
     {

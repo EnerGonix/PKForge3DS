@@ -1,4 +1,5 @@
 #include "bank.hpp"
+#include "romhack.hpp"
 #include "files.hpp"
 #include "pkdata.hpp"
 
@@ -276,8 +277,17 @@ bool Bank::put(const pksm::PKX& pk, int box, int slot, const std::string& source
     e.source = source;
     describe(e, pk);
     // PKForge keeps decrypted party data; Gen I/II keep their names alongside, as PKHeX's lists do.
-    auto party = pk.partyClone();
-    auto raw   = party->rawData();
+    std::vector<u8> raw;
+    if (romhack::is(pk))
+    {
+        raw = romhack::bankBytes(pk);
+    }
+    else
+    {
+        auto party = pk.partyClone();
+        auto r     = party->rawData();
+        raw.assign(r.begin(), r.end());
+    }
     std::string bin = dir() + "/" + fileId(e.id) + ".bin";
     if (!files::write(bin, raw.data(), raw.size()))
     {

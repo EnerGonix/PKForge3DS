@@ -1,4 +1,5 @@
 #include "inspector.hpp"
+#include "romhack.hpp"
 #include "facts.hpp"
 #include "gfx.hpp"
 #include "pkdata.hpp"
@@ -329,12 +330,16 @@ namespace inspector
         }
 
         // Generation, format and the quick verdict; where it sits.
-        auto found = checks(*pk);
+        auto found = romhack::is(*pk) ? decltype(checks(*pk)){} : checks(*pk);
         bool clean = std::all_of(found.begin(), found.end(), [](auto& c) { return c.second; });
         snprintf(line, sizeof(line), "G%d", pkdata::genNumber(pk->generation()));
         x = 122 + text(122, 70, line, T::SubInk) + 8;
         x += text(x, 70, pkdata::format(*pk), T::Value) + 10;
-        if (clean)
+        if (romhack::is(*pk))
+        {
+            text(x, 70, "ROM hack: not checked", T::SubInk);
+        }
+        else if (clean)
         {
             image(ui::check, x, 70);
             text(x + 17, 70, "No problems", S::Legal);

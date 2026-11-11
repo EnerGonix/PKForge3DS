@@ -1,5 +1,6 @@
 // The Pokémon editor: PKForge's editor rows on the touch screen, the live inspector on top.
 #include "gfx.hpp"
+#include "romhack.hpp"
 #include "hax.hpp"
 #include "inspector.hpp"
 #include "legality.hpp"
@@ -189,7 +190,7 @@ namespace
         void drawBottom() override
         {
             housing(0, 0, BOTTOM_W, H);
-            widgets::titleBar(BOTTOM_W, pkdata::game(u8(version)), changed ? "Edited" : "Editor");
+            widgets::titleBar(BOTTOM_W, sav && romhack::is(*sav) ? std::string(romhack::name(romhack::hackOf(*sav))) : pkdata::game(u8(version)), changed ? "Edited" : "Editor");
             // The name plate, as the original editor's: "Venusaur  Lv.100" in the banner blue.
             int plateW = step ? ARROW_X - 7 : BOTTOM_W - 8;
             panelGrad(4, PLATE_Y, plateW, 18, T::PartySelected, T::ChipTop, T::PartyRim);
@@ -463,7 +464,7 @@ namespace
             rows.push_back({"Species", pkdata::species(species), [this, species]()
                 {
                     std::vector<screens::PickItem> items;
-                    for (auto& s : hax::species(version))
+                    for (auto& s : sav && romhack::is(*sav) ? romhack::species(romhack::hackOf(*sav)) : hax::species(version))
                     {
                         items.push_back({int(u16(s)), pkdata::species(u16(s)), ""});
                     }
@@ -534,7 +535,7 @@ namespace
                 rows.push_back({"Held item", item ? pkdata::item(item) : "(None)", [this, item]()
                     {
                         std::vector<screens::PickItem> items{{0, "(None)", ""}};
-                        for (int id : hax::items(version))
+                        for (int id : sav && romhack::is(*sav) ? romhack::items(romhack::hackOf(*sav)) : hax::items(version))
                         {
                             if (id && !pkdata::item(id).empty())
                             {
@@ -851,7 +852,7 @@ namespace
                 rows.push_back({label, m ? pkdata::move(m) : "-", [this, i, m]()
                     {
                         std::vector<screens::PickItem> items{{0, "(None)", ""}};
-                        for (auto& mv : hax::moves(version))
+                        for (auto& mv : sav && romhack::is(*sav) ? romhack::moves(romhack::hackOf(*sav)) : hax::moves(version))
                         {
                             int id = u16(mv);
                             if (id)
@@ -891,7 +892,7 @@ namespace
                     rows.push_back({label, m ? pkdata::move(m) : "-", [this, i, m]()
                         {
                             std::vector<screens::PickItem> items{{0, "(None)", ""}};
-                            for (auto& mv : hax::moves(version))
+                            for (auto& mv : sav && romhack::is(*sav) ? romhack::moves(romhack::hackOf(*sav)) : hax::moves(version))
                             {
                                 int id = u16(mv);
                                 if (id)

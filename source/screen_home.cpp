@@ -89,13 +89,33 @@ namespace
     std::string gameName(const SaveRef& s)
     {
         auto it = editions().find(s.path);
-        return it != editions().end() ? it->second.name : pkdata::game(s.version);
+        if (it != editions().end())
+        {
+            return it->second.name;
+        }
+        return s.label.empty() ? pkdata::game(s.version) : s.label;
     }
 
     std::string gameArtOf(const SaveRef& s)
     {
         auto it = editions().find(s.path);
-        return it != editions().end() ? it->second.art : pkdata::gameArt(s.version);
+        if (it != editions().end())
+        {
+            return it->second.art;
+        }
+        if (s.label == "Radical Red")
+        {
+            return "radical-red";
+        }
+        if (s.label == "Unbound")
+        {
+            return "unbound";
+        }
+        if (s.label == "GS Chronicles")
+        {
+            return "gs-chronicles";
+        }
+        return pkdata::gameArt(s.version);
     }
 
     // The tiles' pixel icons, drawn as the original's (white on the tile).

@@ -1,4 +1,5 @@
 #include "world.hpp"
+#include "romhack.hpp"
 #include "gamecube.hpp"
 #include "app.hpp"
 #include "locks.hpp"
@@ -40,7 +41,7 @@ namespace world
 
         Game gameOf(const pksm::Sav& sav)
         {
-            if (gamecube::is(sav))
+            if (gamecube::is(sav) || romhack::is(sav))
             {
                 return Game::None;
             }
@@ -1061,7 +1062,7 @@ namespace world
         EventSpace eventSpace(const pksm::Sav& sav)
         {
             EventSpace e;
-            if (gamecube::is(sav))
+            if (gamecube::is(sav) || romhack::is(sav))
             {
                 return e;
             }
@@ -1687,7 +1688,7 @@ namespace world
 
     bool hasDayCare(const pksm::Sav& sav)
     {
-        if (gamecube::is(sav))
+        if (gamecube::is(sav) || romhack::is(sav))
         {
             return false;
         }

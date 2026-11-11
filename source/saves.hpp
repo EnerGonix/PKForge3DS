@@ -22,6 +22,7 @@ struct SaveRef
     u64 titleId = 0; // a 3DS game's save, read through the FS service
     u8 media    = 0; // FS_MediaType of that game
     bool gbFile = false; // the Virtual Console's /sav.dat rather than /main
+    std::string label;   // a ROM hack's name ("Radical Red"), shown instead of the game
 
     bool isTitle() const { return titleId != 0; }
 };
