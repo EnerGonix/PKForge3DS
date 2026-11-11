@@ -36,13 +36,13 @@ Moon) and GameCube Colosseum/XD; Let's Go and the Switch games are out of scope.
 | Poképark: map, residents, emotes, ball, races, campfire, journal, hide and seek, feed, photo | screen_park | done |
 | Poképark ParkLife: evolution, Snorlax, trolls, visitors, powers, quirks, habits, respect, chronicle, evenings, games, daycare, talk, lore, goals, absence | screen_park + park_life.inc | done (this port's compact version of each system) |
 | Poképark album, credits statue, Wilds (release and return), treasures | Poképark > More | done |
-| ROM hacks: Pokémon Unbound, Radical Red (CFRU), Gold & Silver Chronicles | romhack.cpp (+ tools/romhacks.py tables): boxes, party, editor, Bank (PK3RR/PK3UB/PK3GSC like Android), cross-hack moves | done (bag and dex not edited, as the original leaves most) |
+| ROM hacks: Pokémon Unbound, Radical Red (CFRU), Gold & Silver Chronicles | romhack.cpp (+ tools/romhacks.py tables): boxes, party, editor, Bank (PK3RR/PK3UB/PK3GSC like Android), cross-hack moves | done (bag; the CFRU Pokédex; Unbound's dex left alone, as in the original) |
 | ROM hack: Luminescent Platinum | - | out of scope (Switch BDSP hack) |
-| Colosseum / XD (.gci) | gamecube.cpp (decrypt, checksums, CK3/XK3 as PK3, Shadow data kept) | done (bag and Strategy Memo not edited) |
+| Colosseum / XD (.gci) | gamecube.cpp (decrypt, checksums, CK3/XK3 as PK3, Shadow data kept, bag, Colosseum Strategy Memo as the Pokédex) | done |
 | RetroArch save containers, SRAM padding | container (RZIP, chip padding, RTC footer; put back on write) | done |
 | Collection Center (community event collections, online) | Bank START > Collection Center (RoC's PC via GitHub, a week's cache) | done |
-| Sprite pack downloader (online) | Settings > HOME renders (renders pulled one by one out of the original's pack by HTTP range; WebP via vendored libwebp) | done (animated Showdown sprites left out: the 3DS cannot play them) |
+| Sprite pack downloader (online) | Settings > HOME renders (renders pulled one by one out of the original's pack by HTTP range; WebP via vendored libwebp) | done (HOME renders and animated Showdown sprites) |
 | Second screen (Thor/Ayn dual screen) | top screen inspector | done by design (the 3DS has two screens) |
 | Gen 8/9 save blocks, Move Shop, Grand Underground, Tera | - | out of scope (Switch) |
-| Bad Apple!! easter egg | - | not ported: the song is not free to redistribute |
+| Bad Apple!! easter egg | About > Konami code (screen_badapple) | done (frames and song read from sdmc:/3ds/PKForge/badapple, not shipped: not free to share) |
 | In-app updates | updater | done |

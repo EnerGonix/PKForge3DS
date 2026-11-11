@@ -160,7 +160,9 @@ its SHA-256 against GitHub's and installs it, then restarts. A quiet check runs 
 
 ### Not in this port
 Let's Go, the Switch games and the Switch ROM hack Luminescent Platinum are out of scope. The Bad Apple!! easter egg
-is not here: its song is not free to share.
+(↑↑↓↓←→←→ B A on the About screen) plays its video and song only from 3ds/PKForge/badapple on the SD card
+(frames.bin from PKForge for Android's resources, and badapple.mp3): they are not free to share, so they are
+not shipped.
 
 ## Install and update
 

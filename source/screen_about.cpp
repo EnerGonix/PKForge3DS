@@ -35,6 +35,8 @@ namespace
 
     class About : public Screen
     {
+        int entered = 0;
+
     public:
         void update(Input& in) override
         {
@@ -58,6 +60,29 @@ namespace
                 {
                     first--;
                     drag = 0;
+                }
+            }
+            static const u32 code[] = {KEY_DUP, KEY_DUP, KEY_DDOWN, KEY_DDOWN, KEY_DLEFT, KEY_DRIGHT, KEY_DLEFT, KEY_DRIGHT, KEY_B, KEY_A};
+            u32 pressed = in.down & (KEY_DUP | KEY_DDOWN | KEY_DLEFT | KEY_DRIGHT | KEY_B | KEY_A);
+            if (pressed)
+            {
+                if (pressed & code[entered])
+                {
+                    entered++;
+                }
+                else
+                {
+                    entered = (pressed & KEY_DUP) ? (entered == 2 ? 2 : 1) : 0;
+                }
+                if (entered == 10)
+                {
+                    entered = 0;
+                    app::push(screens::badApple());
+                    return;
+                }
+                if (entered >= 9)
+                {
+                    return; // the code's B does not close the window
                 }
             }
             if (in.down & (KEY_B | KEY_A))

@@ -35,6 +35,8 @@ namespace screens
     std::unique_ptr<Screen> about();
     // Music and effects on or off, and the speaker test.
     void soundMenu();
+    // The About screen's easter egg (the Konami code there).
+    std::unique_ptr<Screen> badApple();
     // The Poképark: Bank Pokémon living on the park map.
     std::unique_ptr<Screen> park();
     // A Pokémon's bytes; done gets the edited one (checksum redone) when the user keeps it.

@@ -58,6 +58,12 @@ release tags are `3ds-vX.Y.Z` (the plain `vX.Y.Z` tags in this fork belong to th
   into the Bank.
 - **HOME renders** from the original's sprite pack, fetched one by one when shown (or all at once).
 - **Move a Bank box** to another place from All boxes.
+- **Bags** for Colosseum/XD and the ROM hacks, the **Pokédex editor** for Colosseum's Strategy Memo and the
+  Radical Red / GS Chronicles Pokédex.
+- **Animated Showdown sprites** from the original's sprite pack (Settings > Sprites: built-in, HOME renders or
+  animated).
+- The About screen's **Bad Apple!!** easter egg (↑↑↓↓←→←→ B A), playing the video and song from
+  3ds/PKForge/badapple on the SD card (they are not shipped with PKForge).
 
 ### Fixed
 - **Updates that stopped half-way**: a dropped or stalled connection now resumes where it stopped (HTTP

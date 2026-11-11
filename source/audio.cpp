@@ -408,6 +408,7 @@ namespace audio
         std::vector<std::string> playlist; // the place's tracks, the user's first, then the build's
         bool silenceHere = false;
         int track = 0;
+        std::string overridePath;
         ndspWaveBuf waves[BUFFERS];
         s16* pcm = nullptr; // BUFFERS x CHUNK frames x 2 channels, linear memory
         int musicChannels = 1, musicRate = RATE;
@@ -425,6 +426,11 @@ namespace audio
             playlist.clear();
             track       = 0;
             silenceHere = false;
+            if (!overridePath.empty())
+            {
+                playlist.push_back(overridePath);
+                return;
+            }
             int at      = int(p);
             std::string choice = choiceOf[at];
             if (choice == "same" && (p == Place::ParkDay || p == Place::ParkNight))
@@ -1043,4 +1049,16 @@ namespace audio
     }
 
     std::string libraryFolder() { return LIBRARY; }
+
+    void override(const std::string& path)
+    {
+        if (!ready)
+        {
+            return;
+        }
+        LightLock_Lock(&lock);
+        overridePath = path;
+        source.reset(); // reload the playlist now
+        LightLock_Unlock(&lock);
+    }
 }

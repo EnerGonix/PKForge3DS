@@ -67,4 +67,6 @@ namespace audio
     void choice(Place p, const std::string& value);
     std::vector<std::pair<std::string, std::string>> library(); // path, title
     std::string libraryFolder();
+    // One track instead of the place's music until cleared with "" (the Bad Apple!! easter egg).
+    void override(const std::string& path);
 }
