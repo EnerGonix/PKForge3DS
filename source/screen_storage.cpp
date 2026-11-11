@@ -599,8 +599,21 @@ namespace
                 outline(GRID_X + 202, 33, 6, 6, S::ShinyGold, 2);
             }
 
-            // The well and its Pokémon.
-            panel(GRID_X, GRID_Y - 1, COLS * CELL_W, ROWS * CELL_H + 2, T::Well, T::WellEdge);
+            // The well and its Pokémon (a Bank box may wear one of the storage palette's wallpapers).
+            u32 well = T::Well;
+            if (!party && side == Side::Bank)
+            {
+                std::string w = bank.wallpaper(box());
+                if (w.compare(0, 6, "color:") == 0)
+                {
+                    well = bankPalette[std::clamp(atoi(w.c_str() + 6), 0, 7)];
+                }
+                else if (w.compare(0, 4, "art:") == 0)
+                {
+                    well = bankPalette[0]; // a game's picture chosen on Android: its first colour stands in
+                }
+            }
+            panel(GRID_X, GRID_Y - 1, COLS * CELL_W, ROWS * CELL_H + 2, well, T::WellEdge);
             // The faint pixel grid of PKForge's box wells.
             for (int gx = GRID_X + 10; gx < GRID_X + COLS * CELL_W - 1; gx += 10)
             {
@@ -2698,6 +2711,28 @@ namespace
             return gen == 3 ? 16 : gen >= 4 && gen <= 7 && sav()->generation() != pksm::Generation::LGPE ? 24 : 0;
         }
 
+        // The original's Bank wallpapers: the storage palette's dark tinted worlds (PKForge.Chrome Pksm.BoxWallpapers).
+        static constexpr u32 bankPalette[8] = {gfx::rgb(0x1B, 0x31, 0x46), gfx::rgb(0x1B, 0x2E, 0x58), gfx::rgb(0x3B, 0x32, 0x38),
+            gfx::rgb(0x42, 0x28, 0x3C), gfx::rgb(0x31, 0x29, 0x55), gfx::rgb(0x18, 0x3A, 0x4A), gfx::rgb(0x40, 0x28, 0x4D),
+            gfx::rgb(0x2A, 0x3B, 0x38)};
+
+        void pickBankWallpaper()
+        {
+            static const char* names[] = {"Jade navy", "Cobalt navy", "Amber dusk", "Coral dusk", "Violet navy", "Aqua navy",
+                "Rose navy", "Leaf navy"};
+            std::string now = bank.wallpaper(box());
+            int current     = now.compare(0, 6, "color:") == 0 ? atoi(now.c_str() + 6) : -1;
+            std::vector<screens::PickItem> items{{-1, "Default", ""}};
+            for (int i = 0; i < 8; i++)
+            {
+                items.push_back({i, names[i], ""});
+            }
+            app::push(screens::picker("Wallpaper of " + boxLabel(Side::Bank, box()), std::move(items), current, [this](int i)
+                {
+                    bank.wallpaper(box(), i < 0 ? "" : "color:" + std::to_string(i));
+                }));
+        }
+
         void pickWallpaper()
         {
             if (hardcoreBlocks())
@@ -2860,6 +2895,10 @@ namespace
             if (side == Side::Save && wallpaperCount() > 0)
             {
                 o.push_back({"Wallpaper...", [this]() { pickWallpaper(); }, "The picture behind this box in the game."});
+            }
+            if (side == Side::Bank)
+            {
+                o.push_back({"Wallpaper...", [this]() { pickBankWallpaper(); }, "The colour behind this Bank box."});
             }
             if (side == Side::Save)
             {

@@ -9,7 +9,7 @@ Moon) and GameCube Colosseum/XD; Let's Go and the Switch games are out of scope.
 | Home, save picker, game art, filters, edit game | screen_home | done |
 | Box browser, party, grab/drag, multi-select, box manager, locks | screen_storage | done |
 | Bank, Bank search, box overview | bank, screen_storage | done (overview = All boxes; no drag-a-box) |
-| Bank wallpapers (BankWallpaperPicker) | - | **to do** |
+| Bank wallpapers (BankWallpaperPicker) | Bank box manager > Wallpaper (the 8 palette colours, box-wallpapers.json shared with Android) | done (games' pictures: PKHeX.Drawing art not bundled) |
 | Pokémon editor: main, stats, moves, trainer, Hyper Training, Pokérus | screen_editor | done |
 | Awards: ribbons (AwardsEditor) | screen_editor (Ribbons) | done |
 | Cosmetics: markings, contest stats, friendship, affection, memories (CosmeticsEditor) | screen_editor | done (memories as numbers) |

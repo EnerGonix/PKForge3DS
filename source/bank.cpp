@@ -137,6 +137,11 @@ bool Bank::load(std::string& error)
         {
             names = n;
         }
+        Json w;
+        if (files::readText(dir() + "/box-wallpapers.json", text) && Json::parse(text, w))
+        {
+            wallpapers = w;
+        }
         return true;
     }
     if (anyIndex)
@@ -196,6 +201,24 @@ std::string Bank::boxName(int box) const
     char buf[16];
     snprintf(buf, sizeof(buf), "Bank %02d", box + 1);
     return buf;
+}
+
+std::string Bank::wallpaper(int box) const
+{
+    return wallpapers.get(std::to_string(box)).asString();
+}
+
+void Bank::wallpaper(int box, const std::string& id)
+{
+    if (id.empty())
+    {
+        wallpapers.erase(std::to_string(box));
+    }
+    else
+    {
+        wallpapers.set(std::to_string(box), id);
+    }
+    files::writeText(dir() + "/box-wallpapers.json", wallpapers.dump());
 }
 
 void Bank::boxName(int box, const std::string& name)

@@ -29,6 +29,10 @@ public:
     void addBox();
     std::string boxName(int box) const;
     void boxName(int box, const std::string& name);
+    // The box's wallpaper as the Android PKForge keeps it (box-wallpapers.json): "color:N" (the storage
+    // palette), "art:<asset>" (a game's wallpaper picture), or "" for the default.
+    std::string wallpaper(int box) const;
+    void wallpaper(int box, const std::string& id);
 
     const BankEntry* at(int box, int slot) const;
     std::unique_ptr<pksm::PKX> pkm(const BankEntry& e) const;
@@ -50,7 +54,8 @@ private:
     int boxCount = 3;
     int migrationVersion = 0;
     bool readOnly_ = false;
-    Json names; // box-names.json
+    Json names;      // box-names.json
+    Json wallpapers; // box-wallpapers.json
 
     std::string dir() const;
     bool saveIndex(std::string& error);
