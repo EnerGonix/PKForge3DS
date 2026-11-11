@@ -71,7 +71,7 @@ namespace
             housing(0, 0, TOP_W, H);
             image(ui::logo, 24, 40);
             text(130, 56, "PKForge", T::Ink, Left, 2);
-            text(130, 86, "for Nintendo 3DS  -  " PKFORGE3DS_VERSION, T::Value);
+            text(130, 86, "for Nintendo 3DS  -  v" PORT_VERSION "  (PKForge " PKFORGE_BASE ")", T::Value);
             text(130, 100, "3DS port and R4 PokéLink by En3rGonix", S::ShinyGold);
             wrap(130, 120, 250,
                 "A Pokémon save editor and Bank. Saves are found anywhere on the SD card; every write keeps a "

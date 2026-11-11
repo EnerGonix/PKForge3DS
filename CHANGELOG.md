@@ -13,6 +13,8 @@ release tags are `3ds-vX.Y.Z` (the plain `vX.Y.Z` tags in this fork belong to th
 - **Faster updates**: the installer gets the download in 256 KB blocks, the socket has a bigger receive
   buffer and the download runs above the screen's priority.
 - On a New 3DS, PKForge runs with the faster clock and the L2 cache.
+- The title screen and About show the app's own version (v1.1.3), which updates change, instead of the
+  Android PKForge version it is based on.
 
 ## [1.1.2] - 2026-11-11
 

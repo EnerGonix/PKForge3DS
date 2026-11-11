@@ -100,7 +100,7 @@ namespace
             rect(220, 132, 140, 1, T::Grid);
             text(290, 140, "Save editor  -  Bank  -  Poképark", T::SubInk, Center);
             text(290, 158, "3DS port by En3rGonix", T::InkSoft, Center);
-            text(TOP_W - 6, 226, PKFORGE3DS_VERSION, T::SubInk, Right);
+            text(TOP_W - 6, 226, "v" PORT_VERSION, T::SubInk, Right); // the version updates install
             fade(TOP_W);
         }
 
