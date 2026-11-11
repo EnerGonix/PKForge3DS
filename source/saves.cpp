@@ -1,4 +1,5 @@
 #include "saves.hpp"
+#include "gamecube.hpp"
 #include "container.hpp"
 #include "app.hpp"
 #include "files.hpp"
@@ -362,14 +363,18 @@ namespace saves
         }
         catch (...)
         {
-            return false;
+            sav = nullptr;
+        }
+        if (!sav)
+        {
+            sav = gamecube::load(data, u32(bytes.size()));
         }
         if (!sav)
         {
             return false;
         }
         out.size    = bytes.size();
-        out.version = u8(sav->version());
+        out.version = gamecube::is(*sav) ? 15 : u8(sav->version());
         out.gen     = pkdata::genNumber(sav->generation());
         if (!pkdata::inScope(out.gen, out.version))
         {
@@ -533,6 +538,10 @@ std::unique_ptr<OpenSave> OpenSave::open(const SaveRef& ref, std::string& error)
     catch (...)
     {
         out->sav = nullptr;
+    }
+    if (!out->sav)
+    {
+        out->sav = gamecube::load(out->data, out->size);
     }
     if (!out->sav)
     {

@@ -71,6 +71,8 @@ namespace pkdata
             case V::EnumType::GD:
             case V::EnumType::SV:
                 return "Gold / Silver";
+            case V::EnumType::CXD:
+                return "Colosseum / XD";
             default:
                 return i18n::game(lang, V{version});
         }

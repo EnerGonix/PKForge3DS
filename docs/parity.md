@@ -38,7 +38,7 @@ Moon) and GameCube Colosseum/XD; Let's Go and the Switch games are out of scope.
 | Poképark album, credits statue, Wilds (release and return), treasures | - | **to do** |
 | ROM hacks: Pokémon Unbound, Radical Red (CFRU), Gold & Silver Chronicles | - | **to do** |
 | ROM hack: Luminescent Platinum | - | out of scope (Switch BDSP hack) |
-| Colosseum / XD (.gci) | - | **to do** |
+| Colosseum / XD (.gci) | gamecube.cpp (decrypt, checksums, CK3/XK3 as PK3, Shadow data kept) | done (bag and Strategy Memo not edited) |
 | RetroArch save containers, SRAM padding | container (RZIP, chip padding, RTC footer; put back on write) | done |
 | Collection Center (community event collections, online) | - | **to do** |
 | Sprite pack downloader (online) | - | to decide (sprites are built in) |

@@ -1,4 +1,5 @@
 #include "world.hpp"
+#include "gamecube.hpp"
 #include "app.hpp"
 #include "locks.hpp"
 #include "pkdata.hpp"
@@ -39,6 +40,10 @@ namespace world
 
         Game gameOf(const pksm::Sav& sav)
         {
+            if (gamecube::is(sav))
+            {
+                return Game::None;
+            }
             switch (u8(sav.version()))
             {
                 case 1: case 2: return Game::RS;
@@ -1056,6 +1061,10 @@ namespace world
         EventSpace eventSpace(const pksm::Sav& sav)
         {
             EventSpace e;
+            if (gamecube::is(sav))
+            {
+                return e;
+            }
             u8 v      = u8(sav.version());
             bool jp   = sav.language() == pksm::Language::JPN;
             bool kr   = sav.language() == pksm::Language::KOR;
@@ -1678,6 +1687,10 @@ namespace world
 
     bool hasDayCare(const pksm::Sav& sav)
     {
+        if (gamecube::is(sav))
+        {
+            return false;
+        }
         u8 v = u8(sav.version());
         return (v >= 39 && v <= 41) || (v >= 1 && v <= 5) || v == 7 || v == 8 || (v >= 10 && v <= 12) ||
                (v >= 20 && v <= 27) || (v >= 30 && v <= 33);
