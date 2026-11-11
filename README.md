@@ -27,6 +27,9 @@ editor and Bank for Android. PKForge itself is C# on .NET MAUI and PKHeX.Core, w
 [PKSM-Core](https://github.com/FlagBrew/PKSM-Core) (the engine of PKSM, which PKForge's look comes
 from) for reading and writing saves.
 
+**Games covered: Generation 1 to 7, from Red/Blue/Green up to Ultra Sun and Ultra Moon** (Game Boy, Game
+Boy Advance, DS and 3DS). Let's Go and the Nintendo Switch games are out of scope.
+
 It opens on a title screen (PKForge's logo over the Android splash colour; touch or A to go on).
 
 ## 📲 Download straight to your 3DS
@@ -73,7 +76,7 @@ The top screen is PKForge's second-screen inspector; the touch screen holds the 
   Red, Blue, Yellow, Gold, Silver and Crystal. Writing commits the save and clears its secure value,
   as PKSM and Checkpoint do, after a restore point of what the game held.
 - Finds saves anywhere on the SD card (emulators, TWiLight Menu++, Checkpoint and JKSV dumps,
-  `sdmc:/3ds/PKForge/saves`), Generation I to IX, as cartridge cards.
+  `sdmc:/3ds/PKForge/saves`), Generation I to VII, as cartridge cards.
 - Boxes and party: grab and drop with A or by dragging with the stylus, L/R for boxes.
 - The Bank, in PKForge's own layout (`index.json` plus one `.bin` per Pokémon) in
   `sdmc:/3ds/PKForge/bank`. SELECT switches between the save and the Bank. Moves between them become
@@ -119,8 +122,7 @@ The top screen is PKForge's second-screen inspector; the touch screen holds the 
 - HaX mode (START): the editor offers every species, move, item and ball the generation can store,
   the 510 EV total goes, and Pokémon move into games that lack them. Off by default (`hax.txt`).
 - Hex editor (X on a Pokémon): its decrypted bytes, edited in hex, kept with a fresh checksum.
-- Mystery Gift (START): PKHeX's database of every real distribution (4301 cards, Generation 4 to 9
-  without BDSP and Legends: Arceus), searchable, sent into the save's gift inbox for the game to hand
+- Mystery Gift (START): PKHeX's database of every real distribution for Generations 4 to 7, searchable, sent into the save's gift inbox for the game to hand
   over. `tools/mysterygift.py` packs PKHeX's `Resources/legality/mgdb/*.pkl` into `romfs/mg`.
 - Export and import of `.pk1`–`.pk9`, `.pb7`, `.pa8`, `.pa9` files (`sdmc:/3ds/PKForge/export`
   and `import`), readable by PKForge, PKHeX and PKSM.
@@ -147,8 +149,8 @@ The top screen is PKForge's second-screen inspector; the touch screen holds the 
   since FlagBrew's own server closed. Its address goes in START > Legality server
   (`sdmc:/3ds/PKForge/legality-server.txt`).
 
-Not in this port (they need PKHeX's own .NET engine or data): Day Care editing, Generate and the encounter
-browser, Colosseum/XD saves, editing BDSP and Legends: Arceus Pokémon, ROM hacks. Use PKHeX on a PC for those.
+Not in this port yet (they need parts of PKHeX ported to C++): Day Care editing, Generate and the encounter
+browser, Colosseum/XD saves, ROM hacks. Let's Go and the Switch games are out of scope.
 
 ## Install
 

@@ -82,6 +82,10 @@ namespace
             k.ref.badges  = atoi(v[12].c_str());
             k.ref.source  = v[13];
             k.ref.ot      = v[14];
+            if (k.save && !pkdata::inScope(k.ref.gen, k.ref.version))
+            {
+                k.save = false; // a Let's Go or Switch save found by an older scan: not listed any more
+            }
             known[v[0]]   = k;
         }
         fclose(f);
@@ -364,6 +368,10 @@ namespace saves
         out.size    = bytes.size();
         out.version = u8(sav->version());
         out.gen     = pkdata::genNumber(sav->generation());
+        if (!pkdata::inScope(out.gen, out.version))
+        {
+            return false; // Let's Go and the Switch games are not covered
+        }
         out.ot      = sav->otName();
         out.tid     = sav->displayTID();
         out.hours   = sav->playedHours();
@@ -518,6 +526,11 @@ std::unique_ptr<OpenSave> OpenSave::open(const SaveRef& ref, std::string& error)
     if (!out->sav)
     {
         error = "PKSM-Core does not recognise this save.";
+        return nullptr;
+    }
+    if (!pkdata::inScope(pkdata::genNumber(out->sav->generation()), int(out->sav->version())))
+    {
+        error = "PKForge 3DS covers the games up to Ultra Sun and Ultra Moon.";
         return nullptr;
     }
     return out;

@@ -4,12 +4,8 @@
 #include "utils/i18n.hpp"
 #include "wcx/PCD.hpp"
 #include "wcx/PGF.hpp"
-#include "wcx/WA9.hpp"
-#include "wcx/WB7.hpp"
 #include "wcx/WC6.hpp"
 #include "wcx/WC7.hpp"
-#include "wcx/WC8.hpp"
-#include "wcx/WC9.hpp"
 
 #include <set>
 
@@ -23,25 +19,16 @@ namespace mysterygift
             int size;
         };
 
-        // The card files a game takes, the full ones (with their texts) first.
+        // The card files a game takes, the full ones (with their texts) first. Generations 4 to 7: PKForge 3DS
+        // goes up to Ultra Sun and Ultra Moon.
         std::vector<Kind> kindsFor(const pksm::Sav& sav)
         {
-            u8 version = u8(sav.version());
             switch (sav.generation())
             {
                 case pksm::Generation::FOUR: return {{"wc4", 856}};
                 case pksm::Generation::FIVE: return {{"pgf", 204}};
                 case pksm::Generation::SIX: return {{"wc6full", 784}, {"wc6", 264}};
                 case pksm::Generation::SEVEN: return {{"wc7full", 784}, {"wc7", 264}};
-                case pksm::Generation::LGPE: return {{"wb7full", 784}};
-                case pksm::Generation::EIGHT:
-                    return version == 44 || version == 45 ? std::vector<Kind>{{"wc8", 0x2D0}} : std::vector<Kind>{};
-                case pksm::Generation::NINE:
-                    if (version == 50 || version == 51)
-                    {
-                        return {{"wc9", 0x2C8}};
-                    }
-                    return version == 52 ? std::vector<Kind>{{"wa9", 0x2C8}} : std::vector<Kind>{};
                 default: return {};
             }
         }
@@ -49,8 +36,7 @@ namespace mysterygift
         int sizeOf(const std::string& file)
         {
             static const std::pair<const char*, int> sizes[] = {{"wc4", 856}, {"pgf", 204}, {"wc6full", 784},
-                {"wc6", 264}, {"wc7full", 784}, {"wc7", 264}, {"wb7full", 784}, {"wc8", 0x2D0}, {"wc9", 0x2C8},
-                {"wa9", 0x2C8}};
+                {"wc6", 264}, {"wc7full", 784}, {"wc7", 264}};
             for (auto& [name, size] : sizes)
             {
                 if (file == name)
@@ -79,22 +65,6 @@ namespace mysterygift
             if (file.rfind("wc7", 0) == 0)
             {
                 return std::make_unique<pksm::WC7>(data, full);
-            }
-            if (file.rfind("wb7", 0) == 0)
-            {
-                return std::make_unique<pksm::WB7>(data, full);
-            }
-            if (file == "wc8")
-            {
-                return std::make_unique<pksm::WC8>(data);
-            }
-            if (file == "wc9")
-            {
-                return std::make_unique<pksm::WC9>(data);
-            }
-            if (file == "wa9")
-            {
-                return std::make_unique<pksm::WA9>(data);
             }
             return nullptr;
         }

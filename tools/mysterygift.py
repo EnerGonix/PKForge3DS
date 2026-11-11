@@ -8,8 +8,8 @@ import os
 import sys
 
 # name: card size (PKSM-Core's WCX lengths)
-CARDS = {'wc4': 856, 'pgf': 204, 'wc6': 264, 'wc6full': 784, 'wc7': 264, 'wc7full': 784, 'wb7full': 784,
-         'wc8': 0x2D0, 'wc9': 0x2C8, 'wa9': 0x2C8}
+# Generations 4 to 7 only: PKForge 3DS goes up to Ultra Sun and Ultra Moon.
+CARDS = {'wc4': 856, 'pgf': 204, 'wc6': 264, 'wc6full': 784, 'wc7': 264, 'wc7full': 784}
 
 
 def main():

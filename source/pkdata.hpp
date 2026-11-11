@@ -24,6 +24,10 @@ namespace pkdata
     std::string language(pksm::Language l);
 
     int genNumber(pksm::Generation g); // 1-9, Let's Go counts as 7
+    // PKForge 3DS covers Generations 1 to 7, up to Ultra Sun and Ultra Moon: no Let's Go (versions 42/43)
+    // and nothing from the Switch (Generation 8 and later).
+    bool inScope(int gen, int version);
+    constexpr int LAST_SPECIES = 807; // Zeraora, the last species Ultra Sun and Ultra Moon have
     std::string format(const pksm::PKX& pk); // PKHeX's type name: PK3, PB7, PA8...
     // PKForge's game art file for a version ("firered"); empty when none.
     const char* gameArt(u8 version);

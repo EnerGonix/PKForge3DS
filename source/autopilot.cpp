@@ -25,7 +25,7 @@ namespace autopilot
 {
     namespace
     {
-        constexpr int SPECIES = 1025, SLOTS = Bank::SLOTS;
+        constexpr int SPECIES = pkdata::LAST_SPECIES, SLOTS = Bank::SLOTS; // up to Ultra Sun and Ultra Moon
         constexpr int BOXES = (SPECIES + SLOTS - 1) / SLOTS;
         // Where the living dex boxes start, kept so a later run fills the same boxes.
         constexpr const char* START_FILE = "sdmc:/3ds/PKForge/autopilot.txt";

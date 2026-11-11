@@ -19,7 +19,7 @@ namespace livingdex
 {
     namespace
     {
-        constexpr int SPECIES = 1025;
+        constexpr int SPECIES = pkdata::LAST_SPECIES; // up to Ultra Sun and Ultra Moon
 
         struct Count
         {

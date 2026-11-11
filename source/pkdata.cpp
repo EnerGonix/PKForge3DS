@@ -95,6 +95,8 @@ namespace pkdata
         }
     }
 
+    bool inScope(int gen, int version) { return gen >= 1 && gen <= 7 && version != 42 && version != 43; }
+
     int genNumber(pksm::Generation g)
     {
         switch (g)

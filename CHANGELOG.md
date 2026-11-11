@@ -16,6 +16,12 @@ release tags are `3ds-vX.Y.Z` (the plain `vX.Y.Z` tags in this fork belong to th
 - **Cursor sound**: a soft tick when the D-pad or Circle Pad moves the cursor.
 - **Download QR code** on the README and releases (FBI / 3dsDL).
 
+### Changed
+- **Games up to Ultra Sun and Ultra Moon** (Generations 1 to 7): saves from Let's Go and the Nintendo
+  Switch games are no longer listed or opened, their Mystery Gift cards are gone (a smaller CIA), and the
+  Living Dex and Dex Autopilot count the 807 species of Ultra Sun and Ultra Moon. Bank entries from newer
+  games are kept as they are.
+
 ### Fixed
 - FBI and 3dsDL showed the CIA as version 0.0.0: the CIA now carries the app's version.
 
