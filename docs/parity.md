@@ -17,7 +17,7 @@ Moon) and GameCube Colosseum/XD; Let's Go and the Switch games are out of scope.
 | Move details: PP Ups, relearn moves (MoveDetailsEditor) | screen_editor | done |
 | Potential: ability slot, Hyper Training (PotentialEditor) | screen_editor | done (Tera = Gen 9, out of scope) |
 | Stats popup (manual IV/EV) | screen_editor | done |
-| Legality check, legalize, Suggest (LegalityAssistUi) | legality | partly (**preview-first Suggest to do**) |
+| Legality check, legalize, Suggest (LegalityAssistUi) | legality, editor > Suggest legal fixes (preview first) | done |
 | Generate wizard / encounter gallery | encounters (Catch in the wild), New egg, egg factory | done |
 | Mystery Gift album (EventGallery) | mysterygift | done |
 | Mystery Gift inbox, read-only (MysteryGiftInboxEditor) | START > Gifts in this save | done |

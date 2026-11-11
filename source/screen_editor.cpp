@@ -2,6 +2,7 @@
 #include "gfx.hpp"
 #include "hax.hpp"
 #include "inspector.hpp"
+#include "legality.hpp"
 #include "profiles.hpp"
 #include "pkdata.hpp"
 #include "screens.hpp"
@@ -423,8 +424,41 @@ namespace
             return t;
         }
 
+        // The original's "Suggest": PKForge's legality rules run on a copy; every change is listed first and
+        // nothing is applied until the player agrees.
+        void suggest()
+        {
+            auto copy                        = pk->clone();
+            std::vector<std::string> changes = legality::fix(*copy, *sav);
+            if (changes.empty())
+            {
+                app::message("Suggest", "PKForge's legality rules would change nothing here.");
+                return;
+            }
+            std::string text = "PKForge's legality rules would change:\n";
+            for (size_t i = 0; i < changes.size() && i < 12; i++)
+            {
+                text += "- " + changes[i] + "\n";
+            }
+            if (changes.size() > 12)
+            {
+                text += "...and " + std::to_string(changes.size() - 12) + " more.\n";
+            }
+            std::shared_ptr<pksm::PKX> keep(copy.release());
+            app::confirm(text + "Apply these changes?", [this, keep]()
+                {
+                    pk = keep->clone();
+                    edited();
+                },
+                "Apply", "Keep as it is");
+        }
+
         void mainRows(std::vector<Row>& rows)
         {
+            if (sav)
+            {
+                rows.push_back({"Suggest legal fixes", "", [this]() { suggest(); }});
+            }
             int species = u16(pk->species());
             rows.push_back({"Species", pkdata::species(species), [this, species]()
                 {
