@@ -43,6 +43,21 @@ release tags are `3ds-vX.Y.Z` (the plain `vX.Y.Z` tags in this fork belong to th
 - **Bank box wallpapers** (the storage palette), kept in the same file as the Android app.
 - **RetroArch compressed saves** (#RZIP) and GBA saves with chip padding or an RTC footer open and are written
   back in the same wrapper.
+- **Pokémon Colosseum and XD: Gale of Darkness** saves (Dolphin .gci): boxes and party as Generation 3
+  Pokémon, Shadow data kept, written back encrypted with valid checksums.
+- **ROM hacks: Radical Red, Unbound and GS Chronicles**: boxes, party, the editor with each hack's own
+  species, moves and items, and the Bank in the Android app's formats (PK3RR, PK3UB, PK3GSC), with moves
+  between hacks that have the species. As in the original, hack Pokémon are not legality-checked.
+- **Poképark, the rest of ParkLife**: wild visitors by place and time (some evolve), flyers, ghosts that fade,
+  teleporters, habits by type, room made for legends, the morning call and Hoothoot's hours, the rain chorus,
+  storms, Snorlax asleep on the bridge, troublemakers, Lapras's ferry and other famous moves, scenes,
+  hunger and a bond kept between visits, illness and healers, "while you were away", three goals a day with a
+  party, the chronicle, digging for treasure, brushing, sparring, head pats, Blissey's daycare, the Wilds
+  (released Pokémon may come back to visit), the photo album and the PKForge statue's credits.
+- **Collection Center**: the community's event collections (RoC's PC on GitHub), a file or a whole folder
+  into the Bank.
+- **HOME renders** from the original's sprite pack, fetched one by one when shown (or all at once).
+- **Move a Bank box** to another place from All boxes.
 
 ### Fixed
 - **Updates that stopped half-way**: a dropped or stalled connection now resumes where it stopped (HTTP

@@ -109,6 +109,10 @@ The top screen is PKForge's second-screen inspector; the touch screen holds the 
   challenge runs.
 
 ### 🧰 Tools
+- **Colosseum / XD** (.gci) and the ROM hacks **Radical Red, Unbound and GS Chronicles**: boxes, party,
+  editor and Bank, like PKForge for Android.
+- **Collection Center** (RoC's PC event collections into the Bank) and **HOME renders** from the original's
+  sprite pack, fetched as they are shown.
 - **Pokédex editor** (each species unseen, seen or caught) and **event flags editor** (every flag and work
   value, with PKHeX's names), **Entralink** (Gen 5), gifts in the save and trainer records.
 - **Suggest legal fixes** in the editor, with ribbons, markings, contest stats, memories, met and egg data.
@@ -154,8 +158,9 @@ Daycare when tired, and the park keeps a journal (`sdmc:/3ds/PKForge/park-journa
 Settings › Check for updates downloads the newest `PKForge.cia` from this page over verified HTTPS, checks
 its SHA-256 against GitHub's and installs it, then restarts. A quiet check runs once a day.
 
-### Not in this port yet
-Colosseum/XD saves and ROM hacks are not planned. Let's Go and the Switch games are out of scope.
+### Not in this port
+Let's Go, the Switch games and the Switch ROM hack Luminescent Platinum are out of scope. The Bad Apple!! easter egg
+is not here: its song is not free to share.
 
 ## Install and update
 
@@ -200,7 +205,8 @@ trainers' and nicknames in every language (both read from PKHeX's C# lists and t
 checkout> .` writes `source/vivillon.inc`, the Vivillon pattern of every 3DS country and region.
 `tools/eventlabels.py <PKHeX checkout> romfs` copies PKHeX's event flag and work labels into `romfs/flags`, and
 `tools/entralink.py <PKHeX checkout> .` writes `source/entralink.inc` (Dream World templates, Pass Powers,
-Funfest missions).
+Funfest missions), and `tools/romhacks.py <PKForge-3.1.1 checkout> .` the ROM hack tables into `romfs/hacks`
+(from the Android app's own data). The WebP decoder of libwebp (BSD) is in `external/libwebp`.
 
 `tools/assets.py` converts PKForge's resources once into `romfs/` (delete `romfs/.assets-done` to redo
 it). `tools/run-autotest.ps1` runs a script from `tests/` in Azahar and saves screenshots; scripts can
@@ -215,6 +221,8 @@ independently (section and Pokémon checksums).
 - PKSM-Core by FlagBrew (Bernardo Giordano, Admiral Fish, piepie62 and contributors), GPLv3 with
   Additional Terms 7.b and 7.c, kept unmodified in `external/PKSM-Core`; memecrypto by SciresM;
   pcg-cpp by Melissa O'Neill.
+- libwebp by Google (BSD licence, `external/libwebp`), the WebP decoder behind the HOME renders; RoC's PC by
+  ReignOfComputer, the event collections the Collection Center browses.
 - PKHeX by Kaphotics and contributors: the research behind PKSM-Core, and (GPLv3) the wild encounter tables,
   location names and RNG methods (Method H/J/K, Monochrome) behind Catch in the wild.
 - AlchemyBats: the tileset the Poképark's map is built on (from the Android PKForge's resources).
