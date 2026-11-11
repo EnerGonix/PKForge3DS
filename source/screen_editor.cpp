@@ -12,6 +12,9 @@
 #include "enums/GameVersion.hpp"
 #include "enums/Move.hpp"
 #include "enums/Nature.hpp"
+#include "enums/Ribbon.hpp"
+#include "pkx/PK6.hpp"
+#include "pkx/PK7.hpp"
 #include "enums/Species.hpp"
 #include "sav/Sav.hpp"
 #include "utils/VersionTables.hpp"
@@ -580,6 +583,170 @@ namespace
                         edited();
                     }});
             }
+            awardRows(rows);
+        }
+
+        // The original's Awards and Cosmetics editors: ribbons, box markings, contest stats, friendship,
+        // affection and trainer memories, each only where the Pokemon's format keeps it.
+        void awardRows(std::vector<Row>& rows)
+        {
+            if (gen() >= 3)
+            {
+                int count = 0;
+                for (u32 i = 0; i < 160; i++)
+                {
+                    pksm::Ribbon r{i};
+                    count += pk->hasRibbon(r) && pk->ribbon(r);
+                }
+                rows.push_back({"Ribbons", count ? num(count) + " ribbons" : "None", [this]() { ribbonMenu(0); }});
+                rows.push_back({"Markings", markingText(), [this]() { markingMenu(0); }});
+                static const char* contest[] = {"Cool", "Beauty", "Cute", "Smart", "Tough", "Sheen"};
+                for (u8 i = 0; i < 6; i++)
+                {
+                    numberRow(rows, contest[i], pk->contest(i), 0, 255,
+                        [this, i](int v) { pk->contest(i, u8(v)); }, 10);
+                }
+            }
+            if (gen() >= 6)
+            {
+                numberRow(rows, "Friendship (handler)", pk->htFriendship(), 0, 255,
+                    [this](int v) { pk->htFriendship(u8(v)); }, 10);
+            }
+            if (gen() == 6)
+            {
+                auto* p = static_cast<pksm::PK6*>(pk.get());
+                numberRow(rows, "Affection (OT)", p->otAffection(), 0, 255, [p](int v) { p->otAffection(u8(v)); }, 10);
+                memoryRows(rows, p);
+            }
+            else if (gen() == 7)
+            {
+                memoryRows(rows, static_cast<pksm::PK7*>(pk.get()));
+            }
+        }
+
+        template <typename P>
+        void memoryRows(std::vector<Row>& rows, P* p)
+        {
+            numberRow(rows, "OT memory", p->otMemory(), 0, 255, [p](int v) { p->otMemory(u8(v)); });
+            numberRow(rows, "OT memory feeling", p->otFeeling(), 0, 24, [p](int v) { p->otFeeling(u8(v)); });
+            numberRow(rows, "OT memory intensity", p->otIntensity(), 0, 7, [p](int v) { p->otIntensity(u8(v)); });
+            numberRow(rows, "OT memory detail", p->otTextVar(), 0, 65535, [p](int v) { p->otTextVar(u16(v)); });
+            numberRow(rows, "Handler memory", p->htMemory(), 0, 255, [p](int v) { p->htMemory(u8(v)); });
+            numberRow(rows, "Handler memory feeling", p->htFeeling(), 0, 24, [p](int v) { p->htFeeling(u8(v)); });
+            numberRow(rows, "Handler memory intensity", p->htIntensity(), 0, 7, [p](int v) { p->htIntensity(u8(v)); });
+            numberRow(rows, "Handler memory detail", p->htTextVar(), 0, 65535, [p](int v) { p->htTextVar(u16(v)); });
+        }
+
+        // Every ribbon this format keeps, On or Off; a pick toggles it and the list comes back at that row.
+        void ribbonMenu(int at)
+        {
+            std::vector<screens::PickItem> items{{-2, "Give every ribbon", ""}, {-1, "Clear every ribbon", ""}};
+            for (u32 i = 0; i < 160; i++)
+            {
+                pksm::Ribbon r{i};
+                if (pk->hasRibbon(r))
+                {
+                    std::string name = i18n::ribbon(pkdata::lang, r);
+                    items.push_back({int(i), (pk->ribbon(r) ? "[On]  " : "[Off]  ") + (name.empty() ? "Ribbon " + num(int(i)) : name), ""});
+                }
+            }
+            app::push(screens::picker("Ribbons", std::move(items), at,
+                [this](int id)
+                {
+                    for (u32 i = 0; i < 160; i++)
+                    {
+                        pksm::Ribbon r{i};
+                        if (!pk->hasRibbon(r))
+                        {
+                            continue;
+                        }
+                        if (id < 0)
+                        {
+                            pk->ribbon(r, id == -2);
+                        }
+                        else if (int(i) == id)
+                        {
+                            pk->ribbon(r, !pk->ribbon(r));
+                        }
+                    }
+                    edited();
+                    ribbonMenu(id);
+                }));
+        }
+
+        // Box markings: Gen 3 has 4 shapes, Gen 4-6 six, Gen 7 six in blue or pink (2 bits each).
+        int markCount() const { return gen() == 3 ? 4 : 6; }
+        int mark(int i) const
+        {
+            u16 v = pk->markValue();
+            return gen() >= 7 ? (v >> (2 * i)) & 3 : (v >> i) & 1;
+        }
+        void mark(int i, int value)
+        {
+            u16 v = pk->markValue();
+            if (gen() >= 7)
+            {
+                v = u16((v & ~(3 << (2 * i))) | (value << (2 * i)));
+            }
+            else
+            {
+                v = u16((v & ~(1 << i)) | ((value & 1) << i));
+            }
+            pk->markValue(v);
+        }
+        std::string markingText() const
+        {
+            static const char* shapes[] = {"Circle", "Triangle", "Square", "Heart", "Star", "Diamond"};
+            std::string out;
+            for (int i = 0; i < markCount(); i++)
+            {
+                if (mark(i))
+                {
+                    out += out.empty() ? shapes[i] : std::string(", ") + shapes[i];
+                }
+            }
+            return out.empty() ? "None" : out;
+        }
+        void markingMenu(int at)
+        {
+            static const char* shapes[]  = {"Circle", "Triangle", "Square", "Heart", "Star", "Diamond"};
+            static const char* colours[] = {"Off", "Blue", "Pink"};
+            std::vector<screens::PickItem> items;
+            for (int i = 0; i < markCount(); i++)
+            {
+                items.push_back({i, std::string(shapes[i]) + ": " + (gen() >= 7 ? colours[std::min(mark(i), 2)] : (mark(i) ? "On" : "Off")), ""});
+            }
+            app::push(screens::picker("Markings", std::move(items), at,
+                [this](int id)
+                {
+                    mark(id, (mark(id) + 1) % (gen() >= 7 ? 3 : 2));
+                    edited();
+                    markingMenu(id);
+                }));
+        }
+
+        // A date as three numbers; false when cancelled.
+        bool askDate(const std::string& title, ::Date& d)
+        {
+            int day = d.day() ? d.day() : 1, month = d.month() ? d.month() : 1;
+            int year = d.year() >= 2000 ? int(d.year()) : 2000;
+            if (!app::numpad(title + ": year", year, 2000, 2099) || !app::numpad(title + ": month", month, 1, 12) ||
+                !app::numpad(title + ": day", day, 1, 31))
+            {
+                return false;
+            }
+            d = ::Date{u8(day), u8(month), u32(year)};
+            return true;
+        }
+        static std::string dateText(const ::Date& d)
+        {
+            if (!d.month())
+            {
+                return "None";
+            }
+            char b[16];
+            snprintf(b, sizeof(b), "%04u-%02u-%02u", unsigned(d.year()), unsigned(d.month()), unsigned(d.day()));
+            return b;
         }
 
         void statRows(std::vector<Row>& rows)
@@ -787,6 +954,51 @@ namespace
                         pk->fatefulEncounter(!pk->fatefulEncounter());
                         edited();
                     }});
+            }
+            if (gen() >= 4)
+            {
+                // The original's Met / origin editor: met date, and where and when the egg was received.
+                rows.push_back({"Met date", dateText(pk->metDate()), [this]()
+                    {
+                        ::Date d = pk->metDate();
+                        if (askDate("Met date", d))
+                        {
+                            pk->metDate(d);
+                            edited();
+                        }
+                    }});
+                std::string eggPlace = pk->eggLocation() ? pkdata::location(pk->generation(), pk->eggLocation()) : "None";
+                rows.push_back({"Egg location", eggPlace.empty() ? num(pk->eggLocation()) : eggPlace, [this]()
+                    {
+                        std::vector<screens::PickItem> items{{0, "None (not from an egg)", ""}};
+                        for (auto& [id, name] : i18n::rawLocations(pkdata::lang, pk->generation()))
+                        {
+                            if (!name.empty() && id)
+                            {
+                                items.push_back({id, name, ""});
+                            }
+                        }
+                        pick("Egg location", std::move(items), pk->eggLocation(), [this](int id)
+                            {
+                                pk->eggLocation(u16(id));
+                                if (!id)
+                                {
+                                    pk->eggDate(::Date{0, 0, 2000});
+                                }
+                            });
+                    }});
+                if (pk->eggLocation())
+                {
+                    rows.push_back({"Egg date", dateText(pk->eggDate()), [this]()
+                        {
+                            ::Date d = pk->eggDate();
+                            if (askDate("Egg date", d))
+                            {
+                                pk->eggDate(d);
+                                edited();
+                            }
+                        }});
+                }
             }
         }
     };
