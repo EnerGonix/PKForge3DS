@@ -10,6 +10,7 @@
 #include <malloc.h>
 #include <algorithm>
 #include <atomic>
+#include <cstdarg>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -26,6 +27,40 @@ namespace updater
         constexpr const char* API   = "https://api.github.com/repos/EnerGonix/PKForge3DS/releases/latest";
         constexpr const char* ASSET = "PKForge.cia";
         constexpr const char* STAMP = "sdmc:/3ds/PKForge/update-check.txt";
+        constexpr const char* LOG   = "sdmc:/3ds/PKForge/update.log"; // what the last check or install did
+        constexpr u32 STACK         = 256 * 1024; // curl + mbedtls verifying RSA-4096 chains need room
+
+        // One line in update.log (a new one is started by each check and install).
+        void ulog(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
+        void ulog(const char* fmt, ...)
+        {
+            FILE* f = fopen(LOG, "a");
+            if (!f)
+            {
+                return;
+            }
+            fprintf(f, "%llu ", (unsigned long long)(osGetTime() / 1000));
+            va_list args;
+            va_start(args, fmt);
+            vfprintf(f, fmt, args);
+            va_end(args);
+            fputc('\n', f);
+            fclose(f);
+        }
+
+        void ulogStart(const char* what)
+        {
+            remove(LOG);
+            ulog("PKForge %s: %s", PORT_VERSION, what);
+        }
+
+        // The host of a URL, for the log (the signed download URLs are long and private-looking).
+        std::string hostOf(const std::string& url)
+        {
+            size_t a = url.find("://");
+            a        = a == std::string::npos ? 0 : a + 3;
+            return url.substr(a, url.find('/', a) - a);
+        }
         constexpr u64 PKFORGE_TITLE = 0x000400000E4F0B00ULL;
 
         // ---------------------------------------------------------------- SHA-256 (FIPS 180-4)
@@ -337,9 +372,20 @@ namespace updater
             curl_easy_setopt(c, CURLOPT_NOSIGNAL, 1L);
             curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, onData);
             curl_easy_setopt(c, CURLOPT_WRITEDATA, &s);
+            char detail[CURL_ERROR_SIZE] = {};
+            curl_easy_setopt(c, CURLOPT_ERRORBUFFER, detail);
+            ulog("GET %s", hostOf(url).c_str());
             CURLcode res = curl_easy_perform(c);
             long status  = 0;
             curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &status);
+            char* last = nullptr;
+            curl_easy_getinfo(c, CURLINFO_EFFECTIVE_URL, &last);
+            curl_off_t bytes = 0;
+            curl_easy_getinfo(c, CURLINFO_SIZE_DOWNLOAD_T, &bytes);
+            long verify = 0;
+            curl_easy_getinfo(c, CURLINFO_SSL_VERIFYRESULT, &verify);
+            ulog("  curl %d (%s) HTTP %ld, %lld bytes, from %s, verify %ld: %s", int(res), curl_easy_strerror(res), status,
+                (long long)bytes, last ? hostOf(last).c_str() : "?", verify, detail);
             curl_easy_cleanup(c);
             if (res == CURLE_OK)
             {
@@ -363,7 +409,7 @@ namespace updater
                     break;
                 default:
                     snprintf(text, sizeof(text), "Could not reach GitHub securely (curl %d: %s).", int(res),
-                        curl_easy_strerror(res));
+                        detail[0] ? detail : curl_easy_strerror(res));
             }
             error = text;
             return false;
@@ -462,6 +508,7 @@ namespace updater
         void checkJob(void* arg)
         {
             Job* j = static_cast<Job*>(arg);
+            ulogStart("check");
             Net net;
             if (!net.ok)
             {
@@ -470,6 +517,8 @@ namespace updater
                 return;
             }
             j->release = latest();
+            ulog("latest %s, %llu bytes: %s", j->release.tag.c_str(), (unsigned long long)j->release.size,
+                j->release.error.empty() ? "ok" : j->release.error.c_str());
             if (!j->release.error.empty())
             {
                 j->error = j->release.error;
@@ -484,21 +533,25 @@ namespace updater
         void installJob(void* arg)
         {
             Job* j = static_cast<Job*>(arg);
+            ulogStart(("install " + j->release.tag).c_str());
             Net net;
             if (!net.ok)
             {
+                ulog("network service did not start");
                 j->error = "The 3DS's network service did not start.";
                 j->state = State::Failed;
                 return;
             }
-            if (R_FAILED(amInit()))
+            if (Result am = amInit(); R_FAILED(am))
             {
+                ulog("amInit %08lX", (unsigned long)am);
                 j->error = "The 3DS's installer (AM) did not start.";
                 j->state = State::Failed;
                 return;
             }
             Handle cia = 0;
             Result res = AM_StartCiaInstall(MEDIATYPE_SD, &cia);
+            ulog("AM_StartCiaInstall %08lX", (unsigned long)res);
             if (R_FAILED(res))
             {
                 amExit();
@@ -518,8 +571,11 @@ namespace updater
                         return false;
                     }
                     u32 written = 0;
-                    if (R_FAILED(FSFILE_Write(cia, &written, offset, d, n, 0)) || written != n)
+                    Result wr   = FSFILE_Write(cia, &written, offset, d, n, 0);
+                    if (R_FAILED(wr) || written != n)
                     {
+                        ulog("FSFILE_Write at %llu (%lu bytes): %08lX, wrote %lu", (unsigned long long)offset,
+                            (unsigned long)n, (unsigned long)wr, (unsigned long)written);
                         return false;
                     }
                     sha.add(d, n);
@@ -530,6 +586,8 @@ namespace updater
                 error);
             std::string digest = sha.hex();
             std::string want   = j->release.digest.rfind("sha256:", 0) == 0 ? j->release.digest.substr(7) : "";
+            ulog("got %llu of %llu bytes, sha256 %s, GitHub's %s", (unsigned long long)offset,
+                (unsigned long long)j->release.size, digest.c_str(), want.c_str());
             if (ok && j->release.size && offset != j->release.size)
             {
                 ok    = false;
@@ -548,6 +606,7 @@ namespace updater
             if (ok)
             {
                 res = AM_FinishCiaInstall(cia);
+                ulog("AM_FinishCiaInstall %08lX", (unsigned long)res);
                 if (R_FAILED(res))
                 {
                     ok = false;
@@ -561,6 +620,7 @@ namespace updater
                 AM_CancelCIAInstall(cia);
             }
             amExit();
+            ulog("%s", ok ? "installed" : error.c_str());
             j->error = error;
             j->state = ok ? State::Done : State::Failed;
         }
@@ -590,7 +650,9 @@ namespace updater
                     return;
                 }
                 join();
-                if (s == State::Available && (in.down & KEY_A))
+                bool reinstall = s == State::UpToDate && !job.release.url.empty() && !newer(job.release.tag) &&
+                                 shown(job.release.tag) == "v" + std::string(PORT_VERSION);
+                if ((s == State::Available || reinstall) && (in.down & KEY_A))
                 {
                     job.got   = 0;
                     job.state = State::Installing;
@@ -626,7 +688,7 @@ namespace updater
                     case State::UpToDate:
                         line1 = "PKForge is up to date.";
                         line2 = "This is version " + std::string(PORT_VERSION) + ", the latest one.";
-                        keys  = {{"B", "Close"}};
+                        keys  = {{"A", "Reinstall"}, {"B", "Close"}};
                         break;
                     case State::Available:
                         snprintf(buf, sizeof(buf), "Version %s is out (this is %s).", shown(job.release.tag).c_str(), PORT_VERSION);
@@ -677,7 +739,7 @@ namespace updater
             {
                 s32 prio = 0x30;
                 svcGetThreadPriority(&prio, CUR_THREAD_HANDLE);
-                job.thread = threadCreate(f, &job, 64 * 1024, prio + 1, -2, false);
+                job.thread = threadCreate(f, &job, STACK, prio + 1, -2, false);
                 if (!job.thread)
                 {
                     job.error = "Could not start the download.";
@@ -707,7 +769,7 @@ namespace updater
         }
         s32 prio = 0x30;
         svcGetThreadPriority(&prio, CUR_THREAD_HANDLE);
-        if (!threadCreate(checkWork, nullptr, 64 * 1024, prio + 2, -2, true))
+        if (!threadCreate(checkWork, nullptr, STACK, prio + 2, -2, true))
         {
             checked = true;
         }
