@@ -19,6 +19,45 @@ namespace encounters
     {
         u16 rd16(const u8* p) { return u16(p[0] | p[1] << 8); }
 
+#include "vivillon.inc"
+
+        // The Vivillon pattern (also Scatterbug's and Spewpa's) of a save's country and region
+        // (PKHeX Vivillon3DS.GetPattern).
+        u8 vivillonPattern(u8 country, u8 region)
+        {
+            if (country >= sizeof(vivillonSameCountry))
+            {
+                return 0;
+            }
+            if (vivillonSameCountry[country])
+            {
+                return vivillonSameCountry[country];
+            }
+            u16 key = u16(country << 8 | region);
+            size_t n = sizeof(vivillonDiffRegion) / sizeof(vivillonDiffRegion[0]);
+            size_t lo = 0, hi = n;
+            while (lo < hi)
+            {
+                size_t mid = (lo + hi) / 2;
+                if (vivillonDiffRegion[mid] < key)
+                {
+                    lo = mid + 1;
+                }
+                else
+                {
+                    hi = mid;
+                }
+            }
+            return lo < n && vivillonDiffRegion[lo] == key ? vivillonDiffForm[lo] : 0;
+        }
+
+        // Generation 3 Unown letter from its PID (PKHeX EntityPID.GetUnownForm3).
+        u8 unownForm3(u32 pid)
+        {
+            u32 v = ((pid >> 24) & 3) << 6 | ((pid >> 16) & 3) << 4 | ((pid >> 8) & 3) << 2 | (pid & 3);
+            return u8(v % 28);
+        }
+
         int genOf(const pksm::Sav& sav) { return pkdata::genNumber(sav.generation()); }
 
         // ---------------------------------------------------------------- the RNG (PKHeX LCRNG)
@@ -157,6 +196,38 @@ namespace encounters
             bool want31 = hgss && (s.type == 8 || s.location == 202);
             u16 tid = pk.TID(), sid = pk.SID();
             Lcrng r{random32()};
+            if (gen == 3 && s.species == 201)
+            {
+                // Unown (PKHeX GenerateMethodH.SetRandomUnown): no nature roll; the PID halves come high first and
+                // are rolled until the letter is the chamber's.
+                for (;;)
+                {
+                    u32 esv = r.next16() % 100;
+                    if (int(esv) < lo || int(esv) > hi)
+                    {
+                        continue;
+                    }
+                    r.next16(); // the level roll (a fixed level)
+                    for (;;)
+                    {
+                        u32 a   = r.next16();
+                        u32 b   = r.next16();
+                        u32 pid = a << 16 | b;
+                        if (unownForm3(pid) != s.form)
+                        {
+                            continue;
+                        }
+                        u32 iv32 = r.ivs();
+                        pk.PID(pid);
+                        pk.setAbility(u8(pid & 1));
+                        setIVs(pk, iv32);
+                        return;
+                    }
+                }
+            }
+            // D/P/Pt Mt. Coronet B1F: every fishing roll there checks the Feebas tiles first (one more call), and
+            // Feebas needs that call's top bit (PKHeX MethodJ.IsValidCoronetB1F).
+            bool coronet = gen == 4 && !hgss && s.type >= 2 && s.type <= 4 && s.rate == 255;
             // Some kinds have to trigger first, judged from the current state (PKHeX CheckEncounterActivation,
             // no lead): Gen 3 Rock Smash, Gen 4 fishing bites, HGSS Rock Smash.
             auto triggers = [&](u32 seed)
@@ -191,6 +262,10 @@ namespace encounters
                     r.next16();
                     continue;
                 }
+                if (coronet && (r.next16() >> 15) != 1 && s.species == 349)
+                {
+                    continue;
+                }
                 u32 esv = gen == 4 && !hgss ? r.next16() / 656u : r.next16() % (safariK ? 10 : 100);
                 if (int(esv) < lo || int(esv) > hi)
                 {
@@ -216,6 +291,23 @@ namespace encounters
                         break; // try again from a new slot roll, as PKHeX does
                     }
                     u32 iv32 = r.ivs();
+                    if (gen == 4 && s.species == 201)
+                    {
+                        if (hgss)
+                        {
+                            // Ruins of Alph entrance: ! or ? from the second call after the IVs
+                            // (PKHeX RuinsOfAlph4.GetEntranceForm on Method 1 seed + 6).
+                            Lcrng f = r;
+                            f.next16();
+                            pk.alternativeForm(u8(26 + (f.next16() & 1)));
+                        }
+                        else
+                        {
+                            // Solaceon Ruins: a room with a single letter, F, R, I, E, N or D.
+                            static const u8 rooms[] = {5, 17, 8, 4, 13, 3};
+                            pk.alternativeForm(rooms[rand() % 6]);
+                        }
+                    }
                     if (want31)
                     {
                         bool any = false;
@@ -304,7 +396,7 @@ namespace encounters
             pk.encryptionConstant(random32());
             pk.nature(pksm::Nature{u8(rand() % 25)});
             pk.gender(pksm::PKX::genderFromRatio(random32(), pk.genderType()));
-            pk.setAbility(u8(1 << (rand() % 2)));
+            pk.setAbility(u8(rand() % 2)); // PKSM-Core: 0 first, 1 second, 2 hidden
             randomIVs(pk);
         }
     }
@@ -508,14 +600,6 @@ namespace encounters
         {
             return "This tree does not shake for your trainer ID (the game picks the trees from it).";
         }
-        if ((gen == 3 || gen == 4) && s.species == 201)
-        {
-            return "Unown's letter comes from an RNG step PKForge does not model yet.";
-        }
-        if (gen == 4 && s.type >= 2 && s.type <= 4 && s.rate == 255)
-        {
-            return "Mt. Coronet's Feebas tiles are not modelled yet.";
-        }
         if (gen == 4 && !hgss && s.type == 9 && s.species == 446 && !munchlaxTree(s, sav.TID(), sav.SID()))
         {
             return "Munchlax only comes to 3 or 4 honey trees, picked by your trainer ID, and none is here.";
@@ -527,11 +611,6 @@ namespace encounters
         if (gen == 3 && s.type > 7)
         {
             return "This kind of encounter is not modelled yet.";
-        }
-        if (gen == 6 && (s.type == 8 || s.species == 666))
-        {
-            return s.species == 666 ? "Vivillon's pattern follows the console's region." :
-                                      "Friend Safari Pokémon come from other players' friend codes.";
         }
         return "";
     }
@@ -685,6 +764,20 @@ namespace encounters
             case 5: monochrome(pk, s.type == 5); break;
             default:
                 modern(pk);
+                if (gen == 6 && s.type == 8 && (version == 24 || version == 25))
+                {
+                    // Friend Safari (PKHeX EncounterSlot6XY): two perfect IVs, and the hidden ability can come too.
+                    static const pksm::Stat stats[] = {pksm::Stat::HP, pksm::Stat::ATK, pksm::Stat::DEF,
+                        pksm::Stat::SPD, pksm::Stat::SPATK, pksm::Stat::SPDEF};
+                    int first = rand() % 6, second = (first + 1 + rand() % 5) % 6;
+                    pk.iv(stats[first], 31);
+                    pk.iv(stats[second], 31);
+                    pk.setAbility(u8(rand() % 3));
+                }
+                if (s.form == 30) // Vivillon's line: the pattern of the save's country and region
+                {
+                    pk.alternativeForm(vivillonPattern(sav.country(), sav.subRegion()));
+                }
                 if (gen == 6)
                 {
                     auto& pk6 = static_cast<pksm::PK6&>(pk);
@@ -854,7 +947,7 @@ namespace encounters
             pk.nature(pksm::Nature{s.nature != 255 ? s.nature : u8(rand() % 25)});
             pk.gender(s.gender != 255 ? pksm::Gender{s.gender} : pksm::PKX::genderFromRatio(random32(), pk.genderType()));
             u8 index = s.ability == 0 ? u8(rand() % 2) : u8(s.ability - 1);
-            pk.setAbility(u8(1 << index));
+            pk.setAbility(index);
             geo(pk, sav, gen);
             if (gen == 7 && s.relearn[0])
             {
@@ -1062,7 +1155,7 @@ namespace encounters
         }
         if (gen >= 6)
         {
-            pk.setAbility(u8(1 << abilityIndex));
+            pk.setAbility(u8(abilityIndex));
             pk.PID(pid);
             pk.encryptionConstant(random32());
         }

@@ -17,7 +17,10 @@ release tags are `3ds-vX.Y.Z` (the plain `vX.Y.Z` tags in this fork belong to th
   Marsh (Safari Ball; R/S/E's extra RNG call; HG/SS's 0-9 slot roll, fixed level and 31-IV re-roll), the
   **Bug Catching Contest** (Sport Ball), **headbutt trees** (Gold/Silver/Crystal: only the trees your trainer ID
   shakes) and Diamond/Pearl/Platinum **honey trees** (honey level roll; Munchlax only on your ID's trees).
-  Still left out: Unown, Mt. Coronet's Feebas tiles, Friend Safari and Vivillon's patterns.
+  Also **Unown** (Gen 3 Tanoby letters from the PID, Solaceon's single-letter rooms, the Ruins of Alph
+  entrance), **Mt. Coronet's Feebas** (the tile check call), the X/Y **Friend Safari** (two perfect IVs, hidden
+  ability possible) and **Vivillon's pattern** from the save's country and region (PKHeX's table, via
+  `tools/vivillon.py`). Every encounter kind of Generations 1 to 7 can now be caught.
 - **Restore points** in the save's START menu: put back the save as it was before an earlier write (what it
   holds now is kept as a new restore point first).
 - **Undo changes**: back to the save as it was opened or last written, Bank moves included.

@@ -152,8 +152,7 @@ Settings › Check for updates downloads the newest `PKForge.cia` from this page
 its SHA-256 against GitHub's and installs it, then restarts. A quiet check runs once a day.
 
 ### Not in this port yet
-Unown, Mt. Coronet's Feebas tiles, Friend Safari and Vivillon's patterns in Catch in the wild. Colosseum/XD
-saves and ROM hacks are not planned. Let's Go and the Switch games are out of scope.
+Colosseum/XD saves and ROM hacks are not planned. Let's Go and the Switch games are out of scope.
 
 ## Install and update
 
@@ -194,7 +193,8 @@ not in the repository: get them from Project_CTR and Epicpkmn11's bannertool rel
 `tools/encounters.py <PKHeX checkout> romfs` packs PKHeX's wild encounter tables (Generations 1 to 7) and
 English location names into `romfs/enc` for Catch in the wild, and `tools/statics.py <PKHeX checkout> romfs`
 its static and gift encounters, and `tools/trades.py <PKHeX checkout> romfs` its in-game trades with their
-trainers' and nicknames in every language (both read from PKHeX's C# lists and text files).
+trainers' and nicknames in every language (both read from PKHeX's C# lists and text files). `tools/vivillon.py <PKHeX
+checkout> .` writes `source/vivillon.inc`, the Vivillon pattern of every 3DS country and region.
 
 `tools/assets.py` converts PKForge's resources once into `romfs/` (delete `romfs/.assets-done` to redo
 it). `tools/run-autotest.ps1` runs a script from `tests/` in Azahar and saves screenshots; scripts can
