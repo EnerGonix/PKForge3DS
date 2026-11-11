@@ -13,8 +13,11 @@ release tags are `3ds-vX.Y.Z` (the plain `vX.Y.Z` tags in this fork belong to th
   Smash check), Methods J/K in Generation 4 (ground tile, fishing bite check), Method 1 for Gen 3/4 statics,
   the Monochrome PID rules in Generation 5 (Hidden Grottos with their hidden ability), perfect IVs, locks,
   relearn moves, region and memory data in Generations 6 and 7, and the **in-game trades** with their fixed
-  PID, IVs, contest stats, trainer and nickname in the save's language. Honey trees, Safari, the Bug Contest
-  and headbutt trees are listed but not made yet.
+  PID, IVs, contest stats, trainer and nickname in the save's language. Also the **Safari Zone** and Great
+  Marsh (Safari Ball; R/S/E's extra RNG call; HG/SS's 0-9 slot roll, fixed level and 31-IV re-roll), the
+  **Bug Catching Contest** (Sport Ball), **headbutt trees** (Gold/Silver/Crystal: only the trees your trainer ID
+  shakes) and Diamond/Pearl/Platinum **honey trees** (honey level roll; Munchlax only on your ID's trees).
+  Still left out: Unown, Mt. Coronet's Feebas tiles, Friend Safari and Vivillon's patterns.
 - **Restore points** in the save's START menu: put back the save as it was before an earlier write (what it
   holds now is kept as a new restore point first).
 - **Undo changes**: back to the save as it was opened or last written, Bank moves included.

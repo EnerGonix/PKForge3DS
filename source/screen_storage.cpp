@@ -3166,8 +3166,9 @@ namespace
                             const encounters::Slot& e = encounters::of(*sav())[index];
                             if (!encounters::catchable(*sav(), e))
                             {
-                                app::message("Catch in the wild", "This kind of encounter needs an RNG step PKForge "
-                                                                  "does not model yet; pick another place.");
+                                std::string why = encounters::notCatchable(*sav(), e);
+                                app::message("Catch in the wild", why.empty() ? "This kind of encounter is not modelled yet; "
+                                                                                "pick another place." : why);
                                 return;
                             }
                             auto pk = freshPk();

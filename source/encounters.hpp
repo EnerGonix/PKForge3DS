@@ -34,6 +34,8 @@ namespace encounters
     std::string kind(const pksm::Sav& sav, const Slot& s);
     // Whether PKForge can make a legal Pokémon from it (see above).
     bool catchable(const pksm::Sav& sav, const Slot& s);
+    // Why not, shown to the user ("" when it is catchable).
+    std::string notCatchable(const pksm::Sav& sav, const Slot& s);
     // Fills a fresh Pokémon of the save (trainer, language, version set) as caught there: species, form,
     // level, met data, PID/IVs/nature/gender/ability by the game's method, moves, friendship.
     void make(pksm::PKX& pk, const pksm::Sav& sav, const Slot& s);

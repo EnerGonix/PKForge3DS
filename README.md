@@ -152,7 +152,7 @@ Settings › Check for updates downloads the newest `PKForge.cia` from this page
 its SHA-256 against GitHub's and installs it, then restarts. A quiet check runs once a day.
 
 ### Not in this port yet
-Honey trees, Safari, the Bug Contest and headbutt trees in Catch in the wild. Colosseum/XD
+Unown, Mt. Coronet's Feebas tiles, Friend Safari and Vivillon's patterns in Catch in the wild. Colosseum/XD
 saves and ROM hacks are not planned. Let's Go and the Switch games are out of scope.
 
 ## Install and update

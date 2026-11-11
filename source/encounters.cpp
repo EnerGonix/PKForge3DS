@@ -53,8 +53,11 @@ namespace encounters
             static const u8 old3[]  = {0, 70, 100};
             static const u8 good3[] = {0, 60, 80, 100};
             static const u8 super3[] = {0, 40, 70, 95, 99, 100}; // Gen 3 Super Rod
-            static const u8 super4[] = {0, 40, 80, 95, 99, 100}; // Gen 4 Good and Super Rod (and HGSS Old Rod)
+            static const u8 superJ[] = {0, 40, 80, 95, 99, 100}; // D/P/Pt Good and Super Rod
+            static const u8 superK[] = {0, 40, 70, 85, 95, 100}; // HG/SS Old, Good and Super Rod
             static const u8 smash4[] = {0, 80, 100};             // HGSS Rock Smash
+            static const u8 headbutt[] = {0, 50, 65, 80, 90, 95, 100}; // HGSS Headbutt
+            static const u8 contest[] = {80, 60, 50, 40, 30, 20, 15, 10, 5, 0, 100}; // HGSS Bug Contest, slot 0 = 80-99
             const u8* t = nullptr;
             int n       = 0;
             if (gen == 3)
@@ -72,16 +75,42 @@ namespace encounters
                     default: return false;
                 }
             }
-            else if (gen == 4)
+            else if (gen == 4 && hgss)
             {
                 switch (type)
                 {
                     case 0: t = grass, n = 12; break;
                     case 1: t = surf, n = 5; break;
-                    case 2: t = hgss ? super4 : surf, n = 5; break;
+                    case 2:
                     case 3:
-                    case 4: t = super4, n = 5; break;
+                    case 4: t = superK, n = 5; break;
                     case 5: t = smash4, n = 2; break;
+                    case 6:
+                    case 7: t = headbutt, n = 6; break;
+                    case 8:
+                        if (slot > 9)
+                        {
+                            return false;
+                        }
+                        lo = contest[slot];
+                        hi = (slot == 0 ? 100 : contest[slot - 1]) - 1;
+                        return true;
+                    case 10: case 11: case 12: case 13: case 14: // Safari Zone: a 0-9 roll, one per slot
+                        lo = hi = slot;
+                        return slot < 10;
+                    default: return false;
+                }
+            }
+            else if (gen == 4)
+            {
+                switch (type)
+                {
+                    case 0: t = grass, n = 12; break;
+                    case 1:
+                    case 2: t = surf, n = 5; break;
+                    case 3:
+                    case 4: t = superJ, n = 5; break;
+                    case 9: lo = 0, hi = 99; return true; // honey trees: the roll is made but not used
                     default: return false;
                 }
             }
@@ -118,7 +147,14 @@ namespace encounters
         {
             int lo = 0, hi = 99;
             range(gen, hgss, s.type, s.number, lo, hi);
-            bool levelRoll = gen == 3 || s.type != 0; // Gen 4: grass slots have a fixed level
+            bool safariK = hgss && s.type >= 10;       // HG/SS Safari Zone
+            // Gen 4: grass slots have a fixed level, and so has the HG/SS Safari Zone.
+            bool levelRoll = gen == 3 || (s.type != 0 && !safariK);
+            bool honey     = gen == 4 && !hgss && s.type == 9;
+            // R/S/E Safari Zone: one more call between level and nature (PKHeX MethodH, no Pokéblock placed).
+            bool safariRSE = gen == 3 && s.location == 57;
+            // HG/SS Bug Contest and Safari Zone re-roll the IVs until one of them is 31.
+            bool want31 = hgss && (s.type == 8 || s.location == 202);
             u16 tid = pk.TID(), sid = pk.SID();
             Lcrng r{random32()};
             // Some kinds have to trigger first, judged from the current state (PKHeX CheckEncounterActivation,
@@ -136,9 +172,10 @@ namespace encounters
                     rate += rate >> 1; // the White Flute, as PKHeX assumes
                     return u16v % 2880 < rate;
                 }
-                if (s.type >= 2 && s.type <= 4)
+                if ((s.type >= 2 && s.type <= 4) || (hgss && s.type >= 12 && s.type <= 14))
                 {
-                    u32 rod = s.type == 2 ? 25 : s.type == 3 ? 50 : 75;
+                    u8 t    = s.type >= 12 ? u8(s.type - 10) : s.type;
+                    u32 rod = t == 2 ? 25 : t == 3 ? 50 : 75;
                     return hgss ? u16v % 100 < rod + 50 : u16v / 656 < rod;
                 }
                 if (s.type == 5)
@@ -154,12 +191,16 @@ namespace encounters
                     r.next16();
                     continue;
                 }
-                u32 esv = gen == 4 && !hgss ? r.next16() / 656u : r.next16() % 100;
+                u32 esv = gen == 4 && !hgss ? r.next16() / 656u : r.next16() % (safariK ? 10 : 100);
                 if (int(esv) < lo || int(esv) > hi)
                 {
                     continue;
                 }
                 u32 lv     = levelRoll ? r.next16() : 0;
+                if (safariRSE)
+                {
+                    r.next16();
+                }
                 u32 nature = gen == 4 && !hgss ? r.next16() / 0xA3Eu : r.next16() % 25;
                 for (;;)
                 {
@@ -175,8 +216,28 @@ namespace encounters
                         break; // try again from a new slot roll, as PKHeX does
                     }
                     u32 iv32 = r.ivs();
+                    if (want31)
+                    {
+                        bool any = false;
+                        for (int i = 0; i < 6; i++)
+                        {
+                            any |= ((iv32 >> (5 * i)) & 31) == 31;
+                        }
+                        if (!any)
+                        {
+                            break;
+                        }
+                    }
                     u8 level = s.min;
-                    if (levelRoll && s.max > s.min)
+                    if (honey)
+                    {
+                        level = u8(5 + lv / 0x1745u); // PKHeX MethodJ.GetHoneyTreeLevel
+                        if (level < s.min || level > s.max)
+                        {
+                            break;
+                        }
+                    }
+                    else if (levelRoll && s.max > s.min)
                     {
                         level = u8(s.min + lv % (1u + s.max - s.min));
                     }
@@ -390,25 +451,101 @@ namespace encounters
         return k;
     }
 
+    namespace
+    {
+        // Gold/Silver/Crystal headbutt trees: which ones shake for a trainer ID (PKHeX EncounterSlot2.IsTreeAvailable).
+        bool treeAvailable2(const Slot& s, u16 tid)
+        {
+            static const u8 places[] = {2, 4, 5, 8, 11, 12, 14, 15, 18, 20, 21, 25, 26, 34, 37, 38, 39, 91, 92};
+            static const u32 trees[] = {0x3FF3FF, 0x0FF3FF, 0x3FE3FF, 0x3EE3FF, 0x2403FF, 0x37F3FF, 0x3FF3FF,
+                0x0013FE, 0x2613FF, 0x3FF3FF, 0x2B93FF, 0x3FF3FF, 0x1843FF, 0x3FF3FF, 0x3FF3FF, 0x3FF3FF, 0x2FF3FF,
+                0x2001FF, 0x2BB3FF};
+            for (size_t i = 0; i < sizeof(places); i++)
+            {
+                if (places[i] == u8(s.location))
+                {
+                    int pivot = tid % 10;
+                    return trees[i] >> (s.type == 6 ? pivot : pivot + 12) & 1;
+                }
+            }
+            return false;
+        }
+
+        // D/P/Pt: Munchlax only comes to the 3-4 honey trees picked by the trainer's ID (PKHeX HoneyTreeUtil).
+        bool munchlaxTree(const Slot& s, u16 tid, u16 sid)
+        {
+            static const u8 treeLocation[] = {20, 20, 21, 22, 23, 24, 25, 25, 26, 27, 27, 28, 29, 30, 33, 36, 37, 47,
+                48, 49, 58};
+            u32 id = u32(sid) << 16 | tid;
+            u8 t[4] = {u8((id >> 24) % 21), u8((id >> 16 & 0xFF) % 21), u8((id >> 8 & 0xFF) % 21), u8((id & 0xFF) % 21)};
+            for (int i = 1; i < 4; i++)
+            {
+                for (int j = 0; j < i; j++)
+                {
+                    if (t[i] == t[j] && ++t[i] >= 21)
+                    {
+                        t[i] = 0;
+                    }
+                }
+            }
+            for (u8 i : t)
+            {
+                if (treeLocation[i] == s.location)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+
+    std::string notCatchable(const pksm::Sav& sav, const Slot& s)
+    {
+        int gen   = genOf(sav);
+        u8 v      = u8(sav.version());
+        bool hgss = v == 7 || v == 8;
+        if (gen == 2 && (s.type == 6 || s.type == 7) && !treeAvailable2(s, sav.TID()))
+        {
+            return "This tree does not shake for your trainer ID (the game picks the trees from it).";
+        }
+        if ((gen == 3 || gen == 4) && s.species == 201)
+        {
+            return "Unown's letter comes from an RNG step PKForge does not model yet.";
+        }
+        if (gen == 4 && s.type >= 2 && s.type <= 4 && s.rate == 255)
+        {
+            return "Mt. Coronet's Feebas tiles are not modelled yet.";
+        }
+        if (gen == 4 && !hgss && s.type == 9 && s.species == 446 && !munchlaxTree(s, sav.TID(), sav.SID()))
+        {
+            return "Munchlax only comes to 3 or 4 honey trees, picked by your trainer ID, and none is here.";
+        }
+        if (gen == 4 && (hgss ? s.type > 14 : (s.type > 4 && s.type != 9)))
+        {
+            return "This kind of encounter is not modelled yet.";
+        }
+        if (gen == 3 && s.type > 7)
+        {
+            return "This kind of encounter is not modelled yet.";
+        }
+        if (gen == 6 && (s.type == 8 || s.species == 666))
+        {
+            return s.species == 666 ? "Vivillon's pattern follows the console's region." :
+                                      "Friend Safari Pokémon come from other players' friend codes.";
+        }
+        return "";
+    }
+
     bool catchable(const pksm::Sav& sav, const Slot& s)
     {
         switch (genOf(sav))
         {
             case 1: return true;
-            case 2: return s.type <= 5; // headbutt trees depend on the trainer ID, the Bug Contest on its ball
-            case 3: return s.species != 201 && s.type <= 7;
-            case 4:
-            {
-                u8 v      = u8(sav.version());
-                bool hgss = v == 7 || v == 8;
-                if (s.species == 201 || (s.type >= 2 && s.type <= 4 && s.rate == 255)) // Unown; Coronet's Feebas
-                {
-                    return false;
-                }
-                return s.type <= 4 || (hgss && s.type == 5);
-            }
+            case 2:
+            case 3:
+            case 4: return notCatchable(sav, s).empty();
             case 5: return true;
-            case 6: return s.type != 8 && s.species != 666; // Vivillon's pattern follows the console's region
+            case 6: return notCatchable(sav, s).empty();
             default: return true;
         }
     }
@@ -534,12 +671,17 @@ namespace encounters
                 break;
             case 3:
             case 4:
+            {
                 classic(pk, s, gen, hgss);
                 if (gen == 4)
                 {
                     static_cast<pksm::PK4&>(pk).encounterType(s.tile);
                 }
+                // The Safari Zone and the Great Marsh need the Safari Ball, the Bug Contest the Sport Ball.
+                bool safari = gen == 3 ? (s.location == 57 || s.location == 136) : (s.location == 52 || s.location == 202);
+                pk.ball(pksm::Ball{u8(safari ? 5 : gen == 4 && hgss && s.type == 8 ? 24 : 4)});
                 break;
+            }
             case 5: monochrome(pk, s.type == 5); break;
             default:
                 modern(pk);
