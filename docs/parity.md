@@ -22,7 +22,7 @@ Moon) and GameCube Colosseum/XD; Let's Go and the Switch games are out of scope.
 | Mystery Gift album (EventGallery) | mysterygift | done |
 | Mystery Gift inbox, read-only (MysteryGiftInboxEditor) | - | **to do** |
 | Day Care (DaycareEditor) | world | done |
-| Dex editor: seen/caught per species (DexEditorPage) | - | **to do** (Complete the Pokédex exists) |
+| Dex editor: seen/caught per species (DexEditorPage) | dexedit, START > Pokédex editor | done |
 | Living dex tracker (CollectionDexPage) | livingdex | done |
 | Dex Autopilot | autopilot | done |
 | Event flags and work vars (EventFlagsEditor) | - | **to do** |

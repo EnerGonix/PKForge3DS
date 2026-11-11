@@ -4,6 +4,7 @@
 #include "audio.hpp"
 #include "bank.hpp"
 #include "encounters.hpp"
+#include "dexedit.hpp"
 #include "files.hpp"
 #include "gfx.hpp"
 #include "hax.hpp"
@@ -1526,6 +1527,11 @@ namespace
                         "Every real distribution for this game, sent to its gift inbox."});
                     o.push_back({"Complete the Pokédex", [this]() { completeDex(); },
                         "Every species this game has, seen and caught."});
+                    if (dexedit::supported(*sav()))
+                    {
+                        o.push_back({"Pokédex editor", [this]() { if (!hardcoreBlocks()) dexEditor(0); },
+                            "Each species unseen, seen or caught; A changes it."});
+                    }
                 }
                 if (side == Side::Save)
                 {
@@ -3541,6 +3547,30 @@ namespace
                                                          "delivery person or the Mystery Gift menu).");
                         },
                         "Send", "Cancel");
+                }));
+        }
+
+        // The original's Dex editor: every species of the game, A cycles unseen -> seen -> caught -> unseen.
+        void dexEditor(int at)
+        {
+            static const char* names[] = {"[ ]  ", "[Seen]  ", "[Caught]  "};
+            std::vector<screens::PickItem> items;
+            for (const pksm::Species& species : sav()->availableSpecies())
+            {
+                u16 id = u16(species);
+                char no[8];
+                snprintf(no, sizeof(no), "%03u ", unsigned(id));
+                items.push_back({id, names[int(dexedit::get(*sav(), id))] + std::string(no) + pkdata::species(id), ""});
+            }
+            std::sort(items.begin(), items.end(), [](const screens::PickItem& a, const screens::PickItem& b) { return a.id < b.id; });
+            app::push(screens::picker("Pokédex editor", std::move(items), at,
+                [this](int id)
+                {
+                    int next = (int(dexedit::get(*sav(), u16(id))) + 1) % 3;
+                    dexedit::set(*sav(), u16(id), dexedit::State(next));
+                    save->dirty = true;
+                    refresh();
+                    dexEditor(id);
                 }));
         }
 
