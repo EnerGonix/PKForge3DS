@@ -13,6 +13,7 @@
 #define STBI_ONLY_PNG
 #define STBI_ONLY_JPEG
 #define STBI_ONLY_BMP
+#define STBI_ONLY_GIF
 #define STBI_NO_STDIO
 #include "files.hpp"
 #include "stb_image.h"

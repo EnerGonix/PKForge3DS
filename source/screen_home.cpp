@@ -672,24 +672,30 @@ namespace
             o.push_back({newer.empty() ? "Check for updates" : "Update to " + newer, []() { app::push(updater::open()); },
                 std::string("This is PKForge 3DS ") + PORT_VERSION + ". New versions come from GitHub and install here."});
             o.push_back({"Sound", []() { screens::soundMenu(); }, "Music and sound effects, on or off."});
-            o.push_back({std::string("HOME renders: ") + (spritepack::enabled() ? "on" : "off"), []()
+            static const char* modeNames[] = {"Built-in", "HOME renders", "Animated"};
+            o.push_back({std::string("Sprites: ") + modeNames[int(spritepack::mode())], []()
                 {
                     std::vector<app::Option> s;
-                    s.push_back({spritepack::enabled() ? "Turn HOME renders off" : "Turn HOME renders on",
-                        []() { spritepack::enabled(!spritepack::enabled()); },
+                    s.push_back({"Built-in sprites", []() { spritepack::mode(spritepack::Mode::BuiltIn); }, "The sprites PKForge carries."});
+                    s.push_back({"HOME renders", []() { spritepack::mode(spritepack::Mode::Home); },
                         "The Android PKForge's sprite pack: each Pokémon's HOME render, fetched when first shown. Needs Wi-Fi."});
-                    s.push_back({"Fetch every render now", []()
+                    s.push_back({"Animated (Showdown)", []() { spritepack::mode(spritepack::Mode::Animated); },
+                        "The sprite pack's animated Showdown sprites, fetched when first shown. Needs Wi-Fi."});
+                    s.push_back({"Fetch all of them now", []()
                         {
-                            spritepack::enabled(true);
+                            if (spritepack::mode() == spritepack::Mode::BuiltIn)
+                            {
+                                app::message("Sprites", "Pick HOME renders or Animated first.");
+                                return;
+                            }
                             spritepack::downloadAll();
-                            app::message("HOME renders", "Fetching every render in the background (about 3,200, a few MB "
-                                                         "each before shrinking). " + spritepack::status());
+                            app::message("Sprites", "Fetching them all in the background. " + spritepack::status());
                         },
                         spritepack::status()});
                     s.push_back({"Close", []() {}});
-                    app::menu("HOME renders", std::move(s));
+                    app::menu("Sprites", std::move(s));
                 },
-                "The sprite pack's HOME renders instead of the built-in sprites."});
+                "Built-in sprites, HOME renders or animated sprites from the original's sprite pack."});
             o.push_back({std::string("Color theme: ") + themeName(theme()), []()
                 {
                     std::vector<screens::PickItem> items;

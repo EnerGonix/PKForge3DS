@@ -753,9 +753,28 @@ namespace gfx
 
     bool front(int species, int form, bool shiny, bool female, float cx, float cy, float scale)
     {
-        // The HOME render from the sprite pack, when it is switched on and has arrived (base forms).
+        // The sprite pack, when it is switched on and the picture has arrived (base forms): a Showdown
+        // animation, frame by frame, or a HOME render.
         if (form == 0)
         {
+            if (const spritepack::Animation* a = spritepack::animated(species, shiny))
+            {
+                u32 total = 0;
+                for (u16 d : a->delays)
+                {
+                    total += d;
+                }
+                u32 t = u32(osGetTime() % std::max<u32>(total, 1));
+                int f = 0;
+                while (f < a->frames - 1 && t >= a->delays[size_t(f)])
+                {
+                    t -= a->delays[size_t(f)];
+                    f++;
+                }
+                rgbaImage(a->pixels.data() + size_t(f) * spritepack::SIZE * spritepack::SIZE * 4, spritepack::SIZE,
+                    spritepack::SIZE, cx, cy, 0x80000000u | u32(species) << 9 | (shiny ? 0x100 : 0) | u32(f), scale);
+                return true;
+            }
             if (const u8* home = spritepack::home(species, shiny))
             {
                 rgbaImage(home, spritepack::SIZE, spritepack::SIZE, cx, cy, u32(species) << 1 | (shiny ? 1 : 0), scale);
