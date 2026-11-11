@@ -109,6 +109,9 @@ The top screen is PKForge's second-screen inspector; the touch screen holds the 
   challenge runs.
 
 ### 🧰 Tools
+- **Pokédex editor** (each species unseen, seen or caught) and **event flags editor** (every flag and work
+  value, with PKHeX's names), **Entralink** (Gen 5), gifts in the save and trainer records.
+- **Suggest legal fixes** in the editor, with ribbons, markings, contest stats, memories, met and egg data.
 - **Legality**: offline checks and fixes (moves the species line can learn, abilities, items, balls, IV/EV/PP
   limits), and PKHeX's full check through FlagBrew's [local-gpss](https://github.com/FlagBrew/local-gpss)
   on a computer on the same Wi-Fi (START > Legality server).
@@ -195,6 +198,9 @@ English location names into `romfs/enc` for Catch in the wild, and `tools/static
 its static and gift encounters, and `tools/trades.py <PKHeX checkout> romfs` its in-game trades with their
 trainers' and nicknames in every language (both read from PKHeX's C# lists and text files). `tools/vivillon.py <PKHeX
 checkout> .` writes `source/vivillon.inc`, the Vivillon pattern of every 3DS country and region.
+`tools/eventlabels.py <PKHeX checkout> romfs` copies PKHeX's event flag and work labels into `romfs/flags`, and
+`tools/entralink.py <PKHeX checkout> .` writes `source/entralink.inc` (Dream World templates, Pass Powers,
+Funfest missions).
 
 `tools/assets.py` converts PKForge's resources once into `romfs/` (delete `romfs/.assets-done` to redo
 it). `tools/run-autotest.ps1` runs a script from `tests/` in Azahar and saves screenshots; scripts can

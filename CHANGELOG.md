@@ -26,6 +26,23 @@ release tags are `3ds-vX.Y.Z` (the plain `vX.Y.Z` tags in this fork belong to th
 - **Undo changes**: back to the save as it was opened or last written, Bank moves included.
 - **All boxes**: every box of the save or the Bank at a glance (how full, who is in it); a pick opens it.
 - **Day Care in Gold, Silver and Crystal** (from PKHeX's layout; not tested on a real save yet).
+- **Editor, like the original's**: ribbons (give or clear each, or all), box markings (Gen 7 blue/pink),
+  contest stats and sheen, handler friendship, affection and trainer memories (Gen 6/7), met date, egg
+  location and date, and **Suggest legal fixes** (PKForge's rules on a copy, every change listed before it
+  applies).
+- **Pokédex editor**: every species of the game unseen, seen or caught (Generations 1 to 7).
+- **Event flags editor** (World & events): every flag and work value of Generations 1 to 7 with PKHeX's
+  names and named values; story flags ask first.
+- **Entralink** (Black/White, Black 2/White 2): White Forest and Black City levels, the Entree Forest (who is
+  there, fill it from PKHeX's legal Dream World templates, open every area, clear it), Pass Powers and the
+  Funfest missions.
+- **Gifts in this save** (the Mystery Gift cards it holds) and **Trainer records** (Gen 6/7), read only, as
+  in the original.
+- **Music menu** like the original's: play/pause, skip, what the menus and the park by day and by night play
+  (every track, one track, the menus' music or silence), shuffle, autostart, and your own files in a library.
+- **Bank box wallpapers** (the storage palette), kept in the same file as the Android app.
+- **RetroArch compressed saves** (#RZIP) and GBA saves with chip padding or an RTC footer open and are written
+  back in the same wrapper.
 
 ### Fixed
 - **Updates that stopped half-way**: a dropped or stalled connection now resumes where it stopped (HTTP
