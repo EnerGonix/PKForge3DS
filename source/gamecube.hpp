@@ -15,4 +15,7 @@ namespace gamecube
     bool is(const pksm::Sav& sav);
     bool isXD(const pksm::Sav& sav);
     const char* name(const pksm::Sav& sav);
+    // Colosseum's Strategy Memo as a Pokédex: 0 unseen, 1 seen, 2 owned.
+    int dexState(const pksm::Sav& sav, u16 species);
+    void dexState(pksm::Sav& sav, u16 species, int state);
 }

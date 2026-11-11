@@ -121,11 +121,19 @@ namespace dexedit
     bool supported(const pksm::Sav& sav)
     {
         int g = gen(sav);
-        return g >= 1 && g <= 7 && u8(sav.version()) != 42 && u8(sav.version()) != 43 && !gamecube::is(sav) && !romhack::is(sav);
+        return g >= 1 && g <= 7 && u8(sav.version()) != 42 && u8(sav.version()) != 43 && (!gamecube::is(sav) || !gamecube::isXD(sav)) && (!romhack::is(sav) || romhack::hasDex(sav));
     }
 
     State get(const pksm::Sav& sav, u16 species)
     {
+        if (gamecube::is(sav))
+        {
+            return State(gamecube::dexState(sav, species));
+        }
+        if (romhack::is(sav))
+        {
+            return State(romhack::dexState(sav, species));
+        }
         pksm::Species sp{species};
         switch (gen(sav))
         {
@@ -170,6 +178,16 @@ namespace dexedit
 
     void set(pksm::Sav& sav, u16 species, State state)
     {
+        if (gamecube::is(sav))
+        {
+            gamecube::dexState(sav, species, int(state));
+            return;
+        }
+        if (romhack::is(sav))
+        {
+            romhack::dexState(sav, species, int(state));
+            return;
+        }
         pksm::Species sp{species};
         int g = gen(sav);
         if (state != State::Unseen)

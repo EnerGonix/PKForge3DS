@@ -34,6 +34,10 @@ namespace romhack
     std::vector<int> species(Hack hack);
     // Whether a hack save can hold this Pokémon (its species is in the hack's table).
     bool canHold(const pksm::Sav& sav, const pksm::PKX& pk);
+    // The CFRU hacks' Pokédex (not Unbound's): 0 unseen, 1 seen, 2 caught.
+    bool hasDex(const pksm::Sav& sav);
+    int dexState(const pksm::Sav& sav, u16 species);
+    void dexState(pksm::Sav& sav, u16 species, int state);
     std::vector<int> moves(Hack hack);
     std::vector<int> items(Hack hack);
 }

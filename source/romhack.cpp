@@ -1,4 +1,6 @@
 #include "romhack.hpp"
+#include "pkdata.hpp"
+#include "item_plain.hpp"
 #include "files.hpp"
 
 #include "personal/personal.hpp"
@@ -716,9 +718,34 @@ namespace romhack
                 u8 empty[PARTY_SIZE] = {};
                 return track(PKHack::make(hack, empty));
             }
-            void dex(const pksm::PKX&) override {}
-            int dexSeen() const override { return 0; }
-            int dexCaught() const override { return 0; }
+            void dex(const pksm::PKX& pk) override
+            {
+                if (hack == Hack::Unbound || pk.egg())
+                {
+                    return;
+                }
+                dexBit(0x310, u16(pk.species()), true);
+                dexBit(0x38D, u16(pk.species()), true);
+                commit(1);
+            }
+            int dexSeen() const override
+            {
+                int n = 0;
+                for (u16 s = 1; hack != Hack::Unbound && s <= 1000; s++)
+                {
+                    n += dexBit(0x310, s);
+                }
+                return n;
+            }
+            int dexCaught() const override
+            {
+                int n = 0;
+                for (u16 s = 1; hack != Hack::Unbound && s <= 1000; s++)
+                {
+                    n += dexBit(0x38D, s);
+                }
+                return n;
+            }
             int currentGiftAmount() const override { return 0; }
             std::unique_ptr<pksm::WCX> mysteryGift(int) const override { return nullptr; }
             void mysteryGift(const pksm::WCX&, int&) override {}
@@ -736,10 +763,167 @@ namespace romhack
             int maxBoxes() const override { return boxes(); }
             size_t maxWondercards() const override { return 0; }
             pksm::Generation generation() const override { return pksm::Generation::THREE; }
-            void item(const pksm::Item&, Pouch, u16) override {}
-            std::unique_ptr<pksm::Item> item(Pouch, u16) const override { return std::make_unique<pksm::Item3>(); }
-            SmallVector<std::pair<Pouch, int>, 15> pouches() const override { return {}; }
-            SmallVector<std::pair<Pouch, std::span<const int>>, 15> validItems() const override { return {}; }
+            // The bag (the original's CFRU and Unbound bag maps): 4-byte slots, zero-id terminated. CFRU hacks run
+            // five pockets from section 13's tail into the raw sector-30/31 region, counts XOR the security key;
+            // Unbound keeps its items in section 13 (every copy) and the rest at fixed offsets, no key.
+            struct Pocket
+            {
+                Pouch pouch;
+                int offset, capacity;
+            };
+            std::vector<Pocket> pockets() const
+            {
+                if (hack == Hack::Unbound)
+                {
+                    return {{Pouch::NormalItem, -1, 100}, {Pouch::Ball, 0x1E31C, 50}, {Pouch::TM, 0x1E3E4, 128},
+                        {Pouch::Berry, 0x1E5E4, 100}};
+                }
+                return {{Pouch::NormalItem, 0x000, 450}, {Pouch::KeyItem, 0x708, 75}, {Pouch::Ball, 0x834, 50},
+                    {Pouch::TM, 0x8FC, 128}, {Pouch::Berry, 0xAFC, 75}};
+            }
+            const Pocket* pocket(Pouch p) const
+            {
+                static std::vector<Pocket> cache[2];
+                auto& c = cache[hack == Hack::Unbound];
+                if (c.empty())
+                {
+                    c = pockets();
+                }
+                for (const Pocket& k : c)
+                {
+                    if (k.pouch == p)
+                    {
+                        return &k;
+                    }
+                }
+                return nullptr;
+            }
+            int slotOffset(const Pocket& k, int slot) const
+            {
+                if (hack == Hack::Unbound)
+                {
+                    return k.offset < 0 ? sec[13] + 0xAD8 + slot * 4 : k.offset + slot * 4;
+                }
+                int image = k.offset + slot * 4;
+                return image < 0x518 ? sec[13] + 0xAD8 + image : 0x1E000 + (image - 0x518 < 0xFF0 ? image - 0x518 : 0x1000 + image - 0x518 - 0xFF0);
+            }
+            u16 bagKey() const { return hack == Hack::Unbound ? 0 : u16(rd32(data.get() + sec[0] + 0xF20)); }
+            void item(const pksm::Item& it, Pouch p, u16 slot) override
+            {
+                const Pocket* k = pocket(p);
+                if (!k || slot >= k->capacity)
+                {
+                    return;
+                }
+                const Tables& t = tables(hack);
+                auto found      = t.itemOf.find(it.id());
+                u16 id          = it.id() && found != t.itemOf.end() ? found->second : 0;
+                int at          = slotOffset(*k, slot);
+                wr16(data.get() + at, id);
+                wr16(data.get() + at + 2, u16((id ? it.count() : 0) ^ (id ? bagKey() : 0)));
+                if (hack == Hack::Unbound && k->offset < 0)
+                {
+                    // Every copy of section 13 holds the items pocket.
+                    for (int s = 0; s < 32; s++)
+                    {
+                        int off = s * SECTOR;
+                        if (rd16(data.get() + off + 0xFF4) == 13 && off != sec[13])
+                        {
+                            memcpy(data.get() + off + 0xAD8 + slot * 4, data.get() + at, 4);
+                        }
+                    }
+                }
+                else if (k->offset + slot * 4 < 0x518)
+                {
+                    commit(13); // mirror section 13's parasite tail to its other copy
+                }
+            }
+            std::unique_ptr<pksm::Item> item(Pouch p, u16 slot) const override
+            {
+                const Pocket* k = pocket(p);
+                if (!k || slot >= k->capacity)
+                {
+                    return std::make_unique<ItemPlain>();
+                }
+                int at = slotOffset(*k, slot);
+                u16 id = rd16(data.get() + at);
+                const Tables& t = tables(hack);
+                auto found      = t.item.find(id);
+                if (!id || found == t.item.end())
+                {
+                    return std::make_unique<ItemPlain>();
+                }
+                return std::make_unique<ItemPlain>(found->second, u16(rd16(data.get() + at + 2) ^ bagKey()));
+            }
+            SmallVector<std::pair<Pouch, int>, 15> pouches() const override
+            {
+                SmallVector<std::pair<Pouch, int>, 15> out;
+                for (const Pocket& k : pockets())
+                {
+                    out.push_back({k.pouch, k.capacity});
+                }
+                return out;
+            }
+            // What each pocket may hold: the hack's items by kind of name, as the original sorts them.
+            SmallVector<std::pair<Pouch, std::span<const int>>, 15> validItems() const override
+            {
+                static std::map<Hack, std::array<std::vector<int>, 5>> cache;
+                auto& lists = cache[hack];
+                if (lists[0].empty())
+                {
+                    for (auto& [hid, national] : tables(hack).item)
+                    {
+                        std::string n = pkdata::item(national);
+                        int pocketNo  = 0;
+                        if (national <= 16 || (national >= 492 && national <= 500) || national == 576 || n.find(" Ball") != std::string::npos)
+                        {
+                            pocketNo = 2;
+                        }
+                        else if (n.rfind("TM", 0) == 0 || n.rfind("HM", 0) == 0)
+                        {
+                            pocketNo = 3;
+                        }
+                        else if (n.size() > 6 && n.compare(n.size() - 6, 6, " Berry") == 0)
+                        {
+                            pocketNo = 4;
+                        }
+                        lists[size_t(pocketNo)].push_back(national);
+                    }
+                    for (auto& l : lists)
+                    {
+                        std::sort(l.begin(), l.end());
+                        l.erase(std::unique(l.begin(), l.end()), l.end());
+                    }
+                }
+                SmallVector<std::pair<Pouch, std::span<const int>>, 15> out;
+                out.push_back({Pouch::NormalItem, std::span<const int>{lists[0]}});
+                if (hack != Hack::Unbound)
+                {
+                    out.push_back({Pouch::KeyItem, std::span<const int>{lists[0]}});
+                }
+                out.push_back({Pouch::Ball, std::span<const int>{lists[2]}});
+                out.push_back({Pouch::TM, std::span<const int>{lists[3]}});
+                out.push_back({Pouch::Berry, std::span<const int>{lists[4]}});
+                return out;
+            }
+
+            // The CFRU Pokédex: two 125-byte bitmaps in section 1 (seen 0x310, caught 0x38D), bit i = dex number
+            // i + 1, the national number. Unbound's is left alone, as in the original.
+            bool dexBit(int at, u16 national) const
+            {
+                int b = national - 1;
+                return national && b < 1000 && (data.get()[sec[1] + at + (b >> 3)] >> (b & 7) & 1);
+            }
+            void dexBit(int at, u16 national, bool on)
+            {
+                int b = national - 1;
+                if (!national || b >= 1000)
+                {
+                    return;
+                }
+                u8& byte = data.get()[sec[1] + at + (b >> 3)];
+                byte     = on ? u8(byte | (1 << (b & 7))) : u8(byte & ~(1 << (b & 7)));
+            }
         };
 
         std::map<const pksm::Sav*, Hack>& liveSav()
@@ -792,6 +976,19 @@ namespace romhack
     }
 
     bool is(const pksm::Sav& sav) { return liveSav().count(&sav) != 0; }
+    bool hasDex(const pksm::Sav& sav) { return is(sav) && hackOf(sav) != Hack::Unbound; }
+    int dexState(const pksm::Sav& sav, u16 species)
+    {
+        auto& s = static_cast<const SavHack&>(sav);
+        return s.dexBit(0x38D, species) ? 2 : s.dexBit(0x310, species) ? 1 : 0;
+    }
+    void dexState(pksm::Sav& sav, u16 species, int state)
+    {
+        auto& s = static_cast<SavHack&>(sav);
+        s.dexBit(0x310, species, state >= 1);
+        s.dexBit(0x38D, species, state >= 2);
+        s.commit(1);
+    }
     bool is(const pksm::PKX& pk) { return livePk().count(&pk) != 0; }
     Hack hackOf(const pksm::Sav& sav)
     {

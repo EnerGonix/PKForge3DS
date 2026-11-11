@@ -1,4 +1,6 @@
 #include "gamecube.hpp"
+#include "utils/ValueConverter.hpp"
+#include "item_plain.hpp"
 
 #include "pkx/PK3.hpp"
 #include "pkx/PKX.hpp"
@@ -645,9 +647,31 @@ namespace gamecube
             {
                 return pksm::PKX::getPKM<pksm::Generation::THREE>(nullptr, pksm::PK3::BOX_LENGTH);
             }
-            void dex(const pksm::PKX&) override {} // the Strategy Memo fills itself in the game
-            int dexSeen() const override { return 0; }
-            int dexCaught() const override { return 0; }
+            void dex(const pksm::PKX& pk) override
+            {
+                if (!xd && !pk.egg() && u16(pk.species()) && u16(pk.species()) <= 386 && memoState(u16(pk.species())) < 2)
+                {
+                    memoSet(u16(pk.species()), 2, pk.PID(), u32(pk.SID()) << 16 | pk.TID());
+                }
+            }
+            int dexSeen() const override
+            {
+                if (xd)
+                {
+                    return 0;
+                }
+                return memoCount();
+            }
+            int dexCaught() const override
+            {
+                int n = 0;
+                for (int i = 0; !xd && i < memoCount(); i++)
+                {
+                    const u8* e = memoEntry(i);
+                    n += (e[0] >> 6 & 1) || !(e[0] >> 7 & 1);
+                }
+                return n;
+            }
             int currentGiftAmount() const override { return 0; }
             std::unique_ptr<pksm::WCX> mysteryGift(int) const override { return nullptr; }
             void mysteryGift(const pksm::WCX&, int&) override {}
@@ -669,10 +693,143 @@ namespace gamecube
             int maxBoxes() const override { return xd ? 8 : 3; }
             size_t maxWondercards() const override { return 0; }
             pksm::Generation generation() const override { return pksm::Generation::THREE; }
-            void item(const pksm::Item&, Pouch, u16) override {}
-            std::unique_ptr<pksm::Item> item(Pouch, u16) const override { return std::make_unique<pksm::Item3>(); }
-            SmallVector<std::pair<Pouch, int>, 15> pouches() const override { return {}; }
-            SmallVector<std::pair<Pouch, std::span<const int>>, 15> validItems() const override { return {}; }
+            // The bag (PKHeX PlayerBag3Colosseum / PlayerBag3XD): big-endian Gen 3 item ids and counts. The
+            // GameCube's own key items, discs and colognes keep their places but are not listed here.
+            u32 pouchAt(Pouch p) const
+            {
+                u32 base = xd ? trainer + 0x4C8 : 0x7F8;
+                switch (p)
+                {
+                    case Pouch::NormalItem: return base;
+                    case Pouch::Ball: return base + (xd ? 0x124 : 0x0FC);
+                    case Pouch::TM: return base + (xd ? 0x164 : 0x13C);
+                    case Pouch::Berry: return base + (xd ? 0x264 : 0x23C);
+                    default: return 0;
+                }
+            }
+            void item(const pksm::Item& it, Pouch p, u16 index) override
+            {
+                u32 at = pouchAt(p);
+                if (!at)
+                {
+                    return;
+                }
+                u16 g3 = it.id() ? u16(pksm::ItemConverter::nationalToG3(it.id())) : 0;
+                be16(slot.data() + at + index * 4, g3);
+                be16(slot.data() + at + index * 4 + 2, g3 ? it.count() : 0);
+            }
+            std::unique_ptr<pksm::Item> item(Pouch p, u16 slotNo) const override
+            {
+                u32 at = pouchAt(p);
+                if (!at)
+                {
+                    return std::make_unique<ItemPlain>();
+                }
+                u16 g3 = be16(slot.data() + at + slotNo * 4);
+                u16 n  = g3 && g3 < 377 ? u16(pksm::ItemConverter::g3ToNational(g3)) : 0;
+                return std::make_unique<ItemPlain>(n, n ? be16(slot.data() + at + slotNo * 4 + 2) : 0);
+            }
+            u16 maxCount(Pouch p) const override { return xd || p == Pouch::Berry ? 999 : 99; }
+            SmallVector<std::pair<Pouch, int>, 15> pouches() const override
+            {
+                return {std::pair{Pouch::NormalItem, xd ? 30 : 20}, std::pair{Pouch::Ball, 16}, std::pair{Pouch::TM, 64},
+                    std::pair{Pouch::Berry, 46}};
+            }
+            SmallVector<std::pair<Pouch, std::span<const int>>, 15> validItems() const override
+            {
+                static std::vector<int> general, balls, tms, berries;
+                if (general.empty())
+                {
+                    static const u16 g[] = {13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
+                        33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 63, 64, 65, 66, 67, 68,
+                        69, 70, 71, 73, 74, 75, 76, 77, 78, 79, 80, 81, 83, 84, 85, 86, 93, 94, 95, 96, 97, 98, 103, 104,
+                        106, 107, 108, 109, 110, 111, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 179, 180,
+                        181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200,
+                        201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 220,
+                        221, 222, 223, 224, 225, 254, 255, 256, 257, 258};
+                    for (u16 i : g)
+                    {
+                        general.push_back(int(pksm::ItemConverter::g3ToNational(i)));
+                    }
+                    for (u16 i = 1; i <= 12; i++)
+                    {
+                        balls.push_back(int(pksm::ItemConverter::g3ToNational(i)));
+                    }
+                    for (u16 i = 289; i <= 338; i++)
+                    {
+                        tms.push_back(int(pksm::ItemConverter::g3ToNational(i)));
+                    }
+                    for (u16 i = 133; i <= 175; i++)
+                    {
+                        berries.push_back(int(pksm::ItemConverter::g3ToNational(i)));
+                    }
+                }
+                return {std::pair{Pouch::NormalItem, std::span<const int>{general}}, std::pair{Pouch::Ball, std::span<const int>{balls}},
+                    std::pair{Pouch::TM, std::span<const int>{tms}}, std::pair{Pouch::Berry, std::span<const int>{berries}}};
+            }
+
+            // Colosseum's Strategy Memo (PKHeX StrategyMemo): 12-byte entries after a count; the first Pokémon met
+            // of each species, seen and owned flags in the top bits. XD's memo is left alone, as PKHeX leaves it.
+            u32 memoAt() const { return 0x82B0; }
+            int memoCount() const { return std::min<int>(be16(slot.data() + memoAt()), 500); }
+            u8* memoEntry(int i) { return slot.data() + memoAt() + 4 + 12 * i; }
+            const u8* memoEntry(int i) const { return slot.data() + memoAt() + 4 + 12 * i; }
+            int memoFind(u16 national) const
+            {
+                u16 internal = u16(pksm::SpeciesConverter::nationalToG3(pksm::Species{national}));
+                for (int i = 0; i < memoCount(); i++)
+                {
+                    if ((be16(memoEntry(i)) & 0x1FF) == internal)
+                    {
+                        return i;
+                    }
+                }
+                return -1;
+            }
+            // 0 unseen, 1 seen, 2 owned
+            int memoState(u16 national) const
+            {
+                int i = memoFind(national);
+                if (i < 0)
+                {
+                    return 0;
+                }
+                const u8* e = memoEntry(i);
+                bool flag0 = e[0] >> 6 & 1, flag1 = e[0] >> 7 & 1;
+                return (flag0 || !flag1) ? 2 : 1;
+            }
+            void memoSet(u16 national, int state, u32 pid = 0, u32 id32 = 0)
+            {
+                int i = memoFind(national);
+                if (state == 0)
+                {
+                    if (i >= 0)
+                    {
+                        // Close the gap: the entries after it move up one.
+                        int n = memoCount();
+                        memmove(memoEntry(i), memoEntry(i + 1), size_t(12 * (n - i - 1)));
+                        memset(memoEntry(n - 1), 0, 12);
+                        be16(slot.data() + memoAt(), u16(n - 1));
+                    }
+                    return;
+                }
+                if (i < 0)
+                {
+                    i = memoCount();
+                    if (i >= 500)
+                    {
+                        return;
+                    }
+                    u8* e = memoEntry(i);
+                    memset(e, 0, 12);
+                    be16(e, u16(pksm::SpeciesConverter::nationalToG3(pksm::Species{national}) & 0x1FF));
+                    be32(e + 4, id32);
+                    be32(e + 8, pid);
+                    be16(slot.data() + memoAt(), u16(i + 1));
+                }
+                u8* e = memoEntry(i);
+                e[0]  = u8((e[0] & 0x3F) | (state == 2 ? 0 : 0x80));
+            }
         };
 
         std::set<const pksm::Sav*>& known()
@@ -724,6 +881,12 @@ namespace gamecube
     }
 
     bool is(const pksm::Sav& sav) { return known().count(&sav) != 0; }
+    int dexState(const pksm::Sav& sav, u16 species) { return static_cast<const SavCXD&>(sav).memoState(species); }
+    void dexState(pksm::Sav& sav, u16 species, int state)
+    {
+        auto& s = static_cast<SavCXD&>(sav);
+        s.memoSet(species, state, 0, u32(s.SID()) << 16 | s.TID());
+    }
     bool isXD(const pksm::Sav& sav) { return is(sav) && static_cast<const SavCXD&>(sav).xd; }
     const char* name(const pksm::Sav& sav) { return isXD(sav) ? "XD: Gale of Darkness" : "Colosseum"; }
 }

@@ -175,7 +175,7 @@ namespace
             housing(0, 0, TOP_W, H);
             image(ui::bag, 12, 10);
             text(46, 16, "Bag", T::Ink, Left, 2);
-            text(388, 20, pkdata::game(save->ref.version), T::InkSoft, Right, 1, 200);
+            text(388, 20, (save->ref.label.empty() ? pkdata::game(save->ref.version) : save->ref.label), T::InkSoft, Right, 1, 200);
             panel(12, 50, 376, 150, T::PanelFill, T::FrameEdge);
             if (!items.empty())
             {
@@ -201,7 +201,7 @@ namespace
         void drawBottom() override
         {
             panel(2, 2, BOTTOM_W - 4, H - 4, T::Deck, T::FrameEdge);
-            widgets::titleBar(BOTTOM_W, pkdata::game(save->ref.version), save->dirty ? "Bag - edited" : "Bag");
+            widgets::titleBar(BOTTOM_W, (save->ref.label.empty() ? pkdata::game(save->ref.version) : save->ref.label), save->dirty ? "Bag - edited" : "Bag");
             if (pouches.empty())
             {
                 text(BOTTOM_W / 2, 110, "This game has no bag to edit", T::InkSoft, Center);
