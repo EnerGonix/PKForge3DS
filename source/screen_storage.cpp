@@ -1427,9 +1427,67 @@ namespace
 
         // ---- menus
 
+        // Every box at a glance (of the side on screen): how full each is and who is in it; a pick opens it.
+        void allBoxes()
+        {
+            std::vector<screens::PickItem> items;
+            int total = 0;
+            for (int b = 0; b < boxCount(); b++)
+            {
+                int count = 0;
+                std::vector<std::string> names;
+                int slots = side == Side::Bank ? Bank::SLOTS : boxSlots();
+                for (int i = 0; i < slots; i++)
+                {
+                    u16 species = 0;
+                    if (side == Side::Bank)
+                    {
+                        if (const BankEntry* e = bank.at(b, i))
+                        {
+                            species = e->species;
+                        }
+                    }
+                    else if (auto pk = read(Spot{Side::Save, b, i, false}))
+                    {
+                        species = pk->egg() ? 0xFFFF : u16(pk->species());
+                    }
+                    if (!species)
+                    {
+                        continue;
+                    }
+                    count++;
+                    std::string name = species == 0xFFFF ? "Egg" : pkdata::species(species);
+                    if (names.size() < 6 && std::find(names.begin(), names.end(), name) == names.end())
+                    {
+                        names.push_back(name);
+                    }
+                }
+                total += count;
+                std::string who;
+                for (auto& n : names)
+                {
+                    who += (who.empty() ? "" : ", ") + n;
+                }
+                if (count > int(names.size()))
+                {
+                    who += "...";
+                }
+                items.push_back({b, boxLabel(side, b) + "  " + std::to_string(count) + "/" + std::to_string(slots) +
+                                        (count ? "  " + who : std::string()), ""});
+            }
+            std::string title = (side == Side::Bank ? "Bank: " : "Boxes: ") + std::to_string(total) + " Pokémon";
+            app::push(screens::picker(title, std::move(items), box(), [this](int b)
+                {
+                    party = false;
+                    box() = b;
+                    refresh();
+                }));
+        }
+
         void saveMenu()
         {
             std::vector<app::Option> o;
+            o.push_back({"All boxes", [this]() { allBoxes(); }, "Every box at a glance: how full, and who is in it."});
             if (save)
             {
                 o.push_back({"Search this save", [this]() { searchSave(); }, "Every Pokémon in the party and the boxes by name; picks open its box."});
