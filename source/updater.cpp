@@ -499,6 +499,7 @@ namespace updater
         {
             std::atomic<State> state{State::Checking};
             std::atomic<u64> got{0};
+            u64 startedAt = 0; // osGetTime() when the install began, for the no-progress warning
             std::atomic<bool> stop{false};
             Release release;
             std::string error;
@@ -579,6 +580,10 @@ namespace updater
                         return false;
                     }
                     sha.add(d, n);
+                    if (offset / (4 << 20) != (offset + n) / (4 << 20))
+                    {
+                        ulog("  %llu MB", (unsigned long long)((offset + n) >> 20));
+                    }
                     offset += n;
                     j->got = offset;
                     return true;
@@ -654,8 +659,9 @@ namespace updater
                                  shown(job.release.tag) == "v" + std::string(PORT_VERSION);
                 if ((s == State::Available || reinstall) && (in.down & KEY_A))
                 {
-                    job.got   = 0;
-                    job.state = State::Installing;
+                    job.got       = 0;
+                    job.startedAt = osGetTime();
+                    job.state     = State::Installing;
                     start(installJob);
                     return;
                 }
@@ -705,6 +711,10 @@ namespace updater
                         line1 = buf;
                         snprintf(buf, sizeof(buf), "%.1f / %.1f MB", double(got) / (1024 * 1024), double(all) / (1024 * 1024));
                         line2 = buf;
+                        if (got == 0 && osGetTime() - job.startedAt > 60000)
+                        {
+                            line2 += "  Nothing has arrived for a minute: B stops, and sdmc:/3ds/PKForge/update.log says where it hung.";
+                        }
                         rect(24, 130, BOTTOM_W - 48, 10, T::Band);
                         rect(24, 130, float(BOTTOM_W - 48) * float(std::min(got, all)) / float(all), 10, T::Cyan);
                         keys = {{"B", "Stop"}};
