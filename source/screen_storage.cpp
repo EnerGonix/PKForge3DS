@@ -1765,8 +1765,8 @@ namespace
                 {
                     o.push_back({"New Pokémon", [this]() { create(); }, "A level 5 Pokémon from this save's trainer."});
                     o.push_back({"Catch in the wild", [this]() { catchWild(); },
-                        "Where a species can be caught in this game, and one caught there as the game makes it.",
-                        !encounters::of(*sav()).empty()});
+                        "Where a species can be caught or received in this game, and one made there as the game makes it.",
+                        !encounters::of(*sav()).empty() || !encounters::statics(*sav()).empty()});
                     o.push_back({"New egg", [this]() { newEgg(); }, "An egg of any species this game has, as from the Day Care."});
                     o.push_back({"Egg factory", [this]() { eggFactory(); }, "One egg of every species, perfect IVs or shiny if you like."});
                 }
@@ -3048,19 +3048,28 @@ namespace
             {
                 return;
             }
-            const auto& all = encounters::of(*sav());
-            if (all.empty())
+            const auto& all     = encounters::of(*sav());
+            const auto& statics = encounters::statics(*sav());
+            if (all.empty() && statics.empty())
             {
                 app::message("Catch in the wild", "PKForge has no encounter table for this game.");
                 return;
             }
-            std::vector<screens::PickItem> items;
-            for (size_t i = 0; i < all.size(); i++)
+            std::vector<u16> species;
+            for (const auto& e : all)
             {
-                if (i == 0 || all[i].species != all[i - 1].species)
-                {
-                    items.push_back({all[i].species, i18n::species(sav()->language(), pksm::Species{all[i].species}), ""});
-                }
+                species.push_back(e.species);
+            }
+            for (const auto& e : statics)
+            {
+                species.push_back(e.species);
+            }
+            std::sort(species.begin(), species.end());
+            species.erase(std::unique(species.begin(), species.end()), species.end());
+            std::vector<screens::PickItem> items;
+            for (u16 sp : species)
+            {
+                items.push_back({sp, i18n::species(sav()->language(), pksm::Species{sp}), ""});
             }
             Spot s = current();
             app::push(screens::picker("Catch in the wild", std::move(items), 1, [this, s](int species)
@@ -3080,6 +3089,20 @@ namespace
                         spots.push_back({int(i), encounters::place(*sav(), e) + "  -  " + encounters::kind(*sav(), e) + "  -  " + levels,
                             ok ? "A catches one here." : "Shown only: PKForge can't make this kind legally yet."});
                     }
+                    // Static and gift encounters first: legendaries, starters, fossils, gifts.
+                    const auto& statics = encounters::statics(*sav());
+                    std::vector<screens::PickItem> fixed;
+                    for (size_t i = 0; i < statics.size(); i++)
+                    {
+                        const encounters::Static& e = statics[i];
+                        if (e.species == species)
+                        {
+                            fixed.push_back({int(100000 + i), encounters::place(*sav(), e) + "  -  " +
+                                                                  (e.gift ? "Gift" : "Static") + "  -  Lv. " +
+                                                                  std::to_string(e.level), "A gets this one."});
+                        }
+                    }
+                    spots.insert(spots.begin(), fixed.begin(), fixed.end());
                     std::vector<std::string> other = encounters::elsewhere(*sav(), u16(species));
                     if (!other.empty())
                     {
@@ -3101,6 +3124,18 @@ namespace
                                     list += (list.empty() ? "" : ", ") + g;
                                 }
                                 app::message("Also wild in", list + ".\nCatch it there and move it here through the Bank.");
+                                return;
+                            }
+                            if (index >= 100000)
+                            {
+                                const encounters::Static& st = encounters::statics(*sav())[index - 100000];
+                                auto pk = freshPk();
+                                encounters::make(*pk, *sav(), st);
+                                writeSlot(s, pk.get());
+                                refresh();
+                                app::toast(i18n::species(sav()->language(), pk->species()) + (st.gift ? " received at " : " caught at ") +
+                                           encounters::place(*sav(), st) + " (Lv. " + std::to_string(pk->level()) +
+                                           "). Write the save to keep it.");
                                 return;
                             }
                             const encounters::Slot& e = encounters::of(*sav())[index];

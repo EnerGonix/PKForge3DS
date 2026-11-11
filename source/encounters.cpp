@@ -5,6 +5,7 @@
 
 #include "pkx/PK2.hpp"
 #include "pkx/PK4.hpp"
+#include "pkx/PK5.hpp"
 #include "pkx/PK6.hpp"
 #include "pkx/PK7.hpp"
 #include "utils/i18n.hpp"
@@ -360,6 +361,81 @@ namespace encounters
         }
     }
 
+    namespace
+    {
+        // Common to wild and static Pokémon: species, form, level, met data, nickname, EVs.
+        void base(pksm::PKX& pk, int gen, u16 species, u8 form, u8 level, u16 location)
+        {
+            pk.species(pksm::Species{species});
+            pk.alternativeForm(form >= 30 ? 0 : form); // 30+ marks "any form" in PKHeX's tables
+            pk.level(level);
+            pk.metLevel(level);
+            pk.egg(false);
+            pk.heldItem(u16(0));
+            pk.nickname(i18n::species(pk.language(), pk.species()));
+            pk.nicknamed(false);
+            for (pksm::Stat st : {pksm::Stat::HP, pksm::Stat::ATK, pksm::Stat::DEF, pksm::Stat::SPD,
+                     pksm::Stat::SPATK, pksm::Stat::SPDEF})
+            {
+                pk.ev(st, 0);
+            }
+            if (gen >= 3)
+            {
+                pk.metLocation(location);
+                pk.eggLocation(0);
+            }
+        }
+
+        void finish(pksm::PKX& pk, const pksm::Sav& sav, const u16* fixedMoves)
+        {
+            u8 version = u8(sav.version());
+            if (fixedMoves && fixedMoves[0])
+            {
+                for (u8 i = 0; i < 4; i++)
+                {
+                    pk.move(i, pksm::Move{fixedMoves[i]});
+                    pk.PPUp(i, 0);
+                }
+            }
+            else
+            {
+                std::vector<u16> moves = learnsets::levelUpMoves(u16(pk.species()), version, pk.level());
+                for (u8 i = 0; i < 4; i++)
+                {
+                    u16 m = moves.size() > i ? moves[moves.size() - 1 - i] : 0;
+                    pk.move(i, pksm::Move{m});
+                    pk.PPUp(i, 0);
+                }
+            }
+            pk.fixMoves();
+            pk.healPP();
+            pk.otFriendship(pk.baseFriendship());
+            pk.refreshChecksum();
+        }
+
+        void geo(pksm::PKX& pk, const pksm::Sav& sav, int gen)
+        {
+            if (gen == 6)
+            {
+                auto& pk6 = static_cast<pksm::PK6&>(pk);
+                pk6.country(sav.country());
+                pk6.region(sav.subRegion());
+                pk6.consoleRegion(sav.consoleRegion());
+                // PKHeX MemoryApplicator.SetRandomMemory6: memory 63, a feeling it allows, full intensity.
+                pk6.otMemory(63);
+                pk6.otFeeling(1);
+                pk6.otIntensity(7);
+            }
+            else if (gen == 7)
+            {
+                auto& pk7 = static_cast<pksm::PK7&>(pk);
+                pk7.country(sav.country());
+                pk7.region(sav.subRegion());
+                pk7.consoleRegion(sav.consoleRegion());
+            }
+        }
+    }
+
     void make(pksm::PKX& pk, const pksm::Sav& sav, const Slot& s)
     {
         int gen     = genOf(sav);
@@ -446,5 +522,156 @@ namespace encounters
         pk.healPP();
         pk.otFriendship(pk.baseFriendship());
         pk.refreshChecksum();
+    }
+
+    const std::vector<Static>& statics(const pksm::Sav& sav)
+    {
+        static std::map<int, std::vector<Static>> cache;
+        int version = int(u8(sav.version()));
+        auto found  = cache.find(version);
+        if (found != cache.end())
+        {
+            return found->second;
+        }
+        std::vector<Static>& out = cache[version];
+        std::vector<u8> data;
+        if (files::read("romfs:/enc/s" + std::to_string(version) + ".bin", data) && data.size() >= 2)
+        {
+            u16 n = rd16(data.data());
+            for (u16 i = 0; i < n && 2 + (i + 1) * 32 <= int(data.size()); i++)
+            {
+                const u8* p = data.data() + 2 + i * 32;
+                Static st;
+                st.species = rd16(p);
+                st.form = p[2], st.level = p[3];
+                st.location = rd16(p + 4);
+                st.ball = p[6], st.ability = p[7], st.neverShiny = p[8], st.flawless = p[9];
+                st.gender = p[10], st.nature = p[11], st.tile = p[12], st.gift = p[13];
+                for (int m = 0; m < 4; m++)
+                {
+                    st.moves[m]   = rd16(p + 14 + 2 * m);
+                    st.relearn[m] = rd16(p + 22 + 2 * m);
+                }
+                out.push_back(st);
+            }
+        }
+        return out;
+    }
+
+    std::string place(const pksm::Sav& sav, const Static& s)
+    {
+        Slot as;
+        as.location = s.location;
+        return place(sav, as);
+    }
+
+    void make(pksm::PKX& pk, const pksm::Sav& sav, const Static& s)
+    {
+        int gen = genOf(sav);
+        base(pk, gen, s.species, s.form, s.level, s.location);
+        pk.ball(pksm::Ball{s.ball});
+        u16 tid = pk.TID(), sid = pk.SID();
+        if (gen == 3 || gen == 4)
+        {
+            // Method 1: the PID (low half first) and the IVs from four calls in a row, not shiny.
+            Lcrng r{random32()};
+            u32 pid;
+            for (;;)
+            {
+                u32 a = r.next16();
+                u32 b = r.next16();
+                pid   = b << 16 | a;
+                if (!shiny3(tid, sid, pid))
+                {
+                    break;
+                }
+            }
+            u32 iv32 = r.ivs();
+            if (gen == 4)
+            {
+                pk.gender(pksm::PKX::genderFromRatio(pid, pk.genderType()));
+                pk.ability(pk.abilities(u8(pid & 1)));
+                pk.PID(pid);
+                static_cast<pksm::PK4&>(pk).encounterType(s.tile);
+            }
+            else
+            {
+                pk.PID(pid);
+                pk.setAbility(u8(pid & 1));
+            }
+            setIVs(pk, iv32);
+        }
+        else if (gen == 5)
+        {
+            // PKHeX EncounterStatic5 + MonochromeRNG.Generate: a single-ability encounter forces bit 16; the
+            // wild xor applies to non-gift, non-hidden-ability, unlocked ones.
+            bool wildXor = s.neverShiny == 0 && !s.gift && s.ability != 3;
+            u32 pid      = random32();
+            if (s.gender != 255)
+            {
+                u8 gr = pk.genderType();
+                if (gr != 0 && gr != 254 && gr != 255)
+                {
+                    pid = (pid & 0xFFFFFF00) | (s.gender == 0 ? u32(gr + rand() % (254 - gr)) : u32(1 + rand() % (gr - 1)));
+                }
+            }
+            if (shiny3(tid, sid, pid))
+            {
+                pid ^= 0x10000000;
+            }
+            if (s.ability != 0)
+            {
+                pid = (pid & ~0x10000u) | (s.ability == 2 ? 0x10000u : 0u);
+            }
+            if (wildXor && (((pid >> 31) ^ (pid & 1) ^ ((tid ^ sid) & 1)) != 0))
+            {
+                pid ^= 0x80000000;
+            }
+            pk.nature(pksm::Nature{s.nature != 255 ? s.nature : u8(rand() % 25)});
+            pk.gender(pksm::PKX::genderFromRatio(pid, pk.genderType()));
+            u8 index = s.ability == 3 ? 2 : u8((pid >> 16) & 1);
+            pk.ability(pk.abilities(index));
+            static_cast<pksm::PK5&>(pk).hiddenAbility(index == 2);
+            pk.PID(pid);
+            randomIVs(pk);
+        }
+        else
+        {
+            // Gen 6/7 (PKHeX EncounterStatic6/7.SetPINGA): random PID and EC, a shiny lock, perfect IVs.
+            u32 pid;
+            do
+            {
+                pid = random32();
+            } while (((tid ^ sid ^ (pid >> 16) ^ (pid & 0xFFFF)) >> 4) == 0);
+            pk.PID(pid);
+            pk.encryptionConstant(random32());
+            randomIVs(pk);
+            static const pksm::Stat stats[] = {pksm::Stat::HP, pksm::Stat::ATK, pksm::Stat::DEF, pksm::Stat::SPD,
+                pksm::Stat::SPATK, pksm::Stat::SPDEF};
+            int perfect[6] = {0, 1, 2, 3, 4, 5};
+            for (int i = 5; i > 0; i--)
+            {
+                std::swap(perfect[i], perfect[rand() % (i + 1)]);
+            }
+            for (int i = 0; i < s.flawless && i < 6; i++)
+            {
+                pk.iv(stats[perfect[i]], 31);
+            }
+            pk.nature(pksm::Nature{s.nature != 255 ? s.nature : u8(rand() % 25)});
+            pk.gender(s.gender != 255 ? pksm::Gender{s.gender} : pksm::PKX::genderFromRatio(random32(), pk.genderType()));
+            u8 index = s.ability == 0 ? u8(rand() % 2) : u8(s.ability - 1);
+            pk.setAbility(u8(1 << index));
+            geo(pk, sav, gen);
+            if (gen == 7 && s.relearn[0])
+            {
+                for (u8 i = 0; i < 4; i++)
+                {
+                    pk.relearnMove(i, pksm::Move{s.relearn[i]});
+                }
+                finish(pk, sav, s.relearn);
+                return;
+            }
+        }
+        finish(pk, sav, s.moves);
     }
 }

@@ -37,4 +37,20 @@ namespace encounters
     // Fills a fresh Pokémon of the save (trainer, language, version set) as caught there: species, form,
     // level, met data, PID/IVs/nature/gender/ability by the game's method, moves, friendship.
     void make(pksm::PKX& pk, const pksm::Sav& sav, const Slot& s);
+
+    // Static and gift encounters (Generations 3-7, tools/statics.py -> romfs/enc/s<version>.bin): the
+    // legendaries and Pokémon standing on the map, starters, fossils and gifts PKForge can make exactly as
+    // PKHeX does (Method 1 in Gen 3 and 4, the Monochrome rules in Gen 5, perfect IVs, locks and relearn
+    // moves in Gen 6 and 7).
+    struct Static
+    {
+        u16 species = 0;
+        u8 form = 0, level = 0;
+        u16 location = 0;
+        u8 ball = 4, ability = 0, neverShiny = 0, flawless = 0, gender = 255, nature = 255, tile = 0, gift = 0;
+        u16 moves[4] = {}, relearn[4] = {};
+    };
+    const std::vector<Static>& statics(const pksm::Sav& sav);
+    std::string place(const pksm::Sav& sav, const Static& s);
+    void make(pksm::PKX& pk, const pksm::Sav& sav, const Static& s);
 }
