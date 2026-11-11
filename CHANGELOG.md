@@ -3,7 +3,15 @@
 All notable changes to PKForge for Nintendo 3DS. Versions follow [Semantic Versioning](https://semver.org);
 release tags are `3ds-vX.Y.Z` (the plain `vX.Y.Z` tags in this fork belong to the Android PKForge).
 
-## [1.1.3] - 2026-11-11
+## [1.2.0] - 2026-11-11
+
+### Added
+- **Catch in the wild** (X on an empty box slot): every wild encounter of the open game, Generations 1 to 7,
+  from PKHeX's tables (place, kind, levels, time of day in Crystal); pick one and the Pokémon is made the way
+  the game makes it, so PKHeX accepts it: Method H in Generation 3, Methods J/K with the ground tile in
+  Generation 4, the Monochrome PID rules in Generation 5, and region and memory data in Generation 6. Kinds
+  that need an RNG step PKForge does not model yet (Rock Smash, Gen 4 fishing and honey trees, Safari, Bug
+  Contest, headbutt trees, hidden grottos, Friend Safari) are listed but not caught.
 
 ### Fixed
 - **Updates that stopped half-way**: a dropped or stalled connection now resumes where it stopped (HTTP
@@ -13,7 +21,7 @@ release tags are `3ds-vX.Y.Z` (the plain `vX.Y.Z` tags in this fork belong to th
 - **Faster updates**: the installer gets the download in 256 KB blocks, the socket has a bigger receive
   buffer and the download runs above the screen's priority.
 - On a New 3DS, PKForge runs with the faster clock and the L2 cache.
-- The title screen and About show the app's own version (v1.1.3), which updates change, instead of the
+- The title screen and About show the app's own version (v1.2.0), which updates change, instead of the
   Android PKForge version it is based on.
 
 ## [1.1.2] - 2026-11-11
@@ -63,7 +71,7 @@ First release: a native 3DS port of [PKForge](https://github.com/sofianeelhor/PK
 with **R4 PokéLink** for the saves on an R4 (Ace3DS) flashcart, Bank, editor, Dex Autopilot, Poképark,
 Mystery Gift database, world & event editors, QR codes, themes and more.
 
-[1.1.3]: https://github.com/EnerGonix/PKForge3DS/releases/tag/3ds-v1.1.3
+[1.2.0]: https://github.com/EnerGonix/PKForge3DS/releases/tag/3ds-v1.2.0
 [1.1.2]: https://github.com/EnerGonix/PKForge3DS/releases/tag/3ds-v1.1.2
 [1.1.1]: https://github.com/EnerGonix/PKForge3DS/releases/tag/3ds-v1.1.1
 [1.1.0]: https://github.com/EnerGonix/PKForge3DS/releases/tag/3ds-v1.1.0

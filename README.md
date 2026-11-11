@@ -112,6 +112,9 @@ The top screen is PKForge's second-screen inspector; the touch screen holds the 
 - **Legality**: offline checks and fixes (moves the species line can learn, abilities, items, balls, IV/EV/PP
   limits), and PKHeX's full check through FlagBrew's [local-gpss](https://github.com/FlagBrew/local-gpss)
   on a computer on the same Wi-Fi (START > Legality server).
+- **Catch in the wild**: every wild encounter of the game (Generations 1 to 7, from PKHeX's tables: place,
+  kind, levels), and a Pokémon caught there made the way the game makes it (Method H in Gen 3, J/K in Gen 4,
+  the Gen 5 PID rules), so PKHeX's legality check accepts it.
 - **Egg factory**: one egg of every species the game can hatch; **new egg** of any species, built as the
   Day Care makes one.
 - **Showdown** sets: export a Pokémon or a box, import sets into the empty slots.
@@ -147,8 +150,9 @@ Settings › Check for updates downloads the newest `PKForge.cia` from this page
 its SHA-256 against GitHub's and installs it, then restarts. A quiet check runs once a day.
 
 ### Not in this port yet
-Generate and the encounter browser, Colosseum/XD saves and ROM hacks need parts of PKHeX ported to C++.
-Let's Go and the Switch games are out of scope.
+Static, gift and trade encounters in Catch in the wild, and the wild kinds that need an RNG step not modelled
+yet (Rock Smash, Gen 4 fishing and honey trees, Safari, Bug Contest, headbutt trees, hidden grottos, Friend
+Safari). Colosseum/XD saves and ROM hacks are not planned. Let's Go and the Switch games are out of scope.
 
 ## Install and update
 
@@ -186,6 +190,9 @@ Kevin MacLeod's CC BY 4.0 tracks kept in `music-cc/`: `carefree.mp3` for title a
 for park-day, `dreamy_flashback.mp3` for park-night. `tools/ctr/makerom.exe` and `bannertool.exe` are
 not in the repository: get them from Project_CTR and Epicpkmn11's bannertool releases.
 
+`tools/encounters.py <PKHeX checkout> romfs` packs PKHeX's wild encounter tables (Generations 1 to 7) and
+English location names into `romfs/enc` for Catch in the wild.
+
 `tools/assets.py` converts PKForge's resources once into `romfs/` (delete `romfs/.assets-done` to redo
 it). `tools/run-autotest.ps1` runs a script from `tests/` in Azahar and saves screenshots; scripts can
 only write saves in `sdmc:/3ds/PKForge/saves`. `tests/check_gen3.py` checks a written Gen 3 save
@@ -199,7 +206,8 @@ independently (section and Pokémon checksums).
 - PKSM-Core by FlagBrew (Bernardo Giordano, Admiral Fish, piepie62 and contributors), GPLv3 with
   Additional Terms 7.b and 7.c, kept unmodified in `external/PKSM-Core`; memecrypto by SciresM;
   pcg-cpp by Melissa O'Neill.
-- PKHeX by Kaphotics and contributors: the research behind PKSM-Core.
+- PKHeX by Kaphotics and contributors: the research behind PKSM-Core, and (GPLv3) the wild encounter tables,
+  location names and RNG methods (Method H/J/K, Monochrome) behind Catch in the wild.
 - AlchemyBats: the tileset the Poképark's map is built on (from the Android PKForge's resources).
 - Audio decoding: [dr_mp3 and dr_wav](https://github.com/mackron/dr_libs) by David Reid (public domain /
   MIT-0) and [stb_vorbis](https://github.com/nothings/stb) by Sean Barrett (public domain), in `external/audio`.

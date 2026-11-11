@@ -3,6 +3,7 @@
 // writing takes deposits back out of the Bank, and withdrawn Pokémon stay in the Bank until then.
 #include "audio.hpp"
 #include "bank.hpp"
+#include "encounters.hpp"
 #include "files.hpp"
 #include "gfx.hpp"
 #include "hax.hpp"
@@ -1700,6 +1701,9 @@ namespace
                 if (s.side == Side::Save)
                 {
                     o.push_back({"New Pokémon", [this]() { create(); }, "A level 5 Pokémon from this save's trainer."});
+                    o.push_back({"Catch in the wild", [this]() { catchWild(); },
+                        "Where a species can be caught in this game, and one caught there as the game makes it.",
+                        !encounters::of(*sav()).empty()});
                     o.push_back({"New egg", [this]() { newEgg(); }, "An egg of any species this game has, as from the Day Care."});
                     o.push_back({"Egg factory", [this]() { eggFactory(); }, "One egg of every species, perfect IVs or shiny if you like."});
                 }
@@ -2907,6 +2911,68 @@ namespace
                                          (skipped ? ", " + std::to_string(skipped) + " skipped" : std::string()) +
                                          (note.empty() ? "" : " (" + note + ")") +
                                          (placed ? ". Write the save to keep them." : "."));
+        }
+
+        // Catch in the wild, as the Android PKForge's encounter gallery: a species of this game's wild tables,
+        // then one of its encounters (place, kind, levels); the Pokémon is made by the game's own method.
+        void catchWild()
+        {
+            if (hardcoreBlocks() || refuseLocked(current()))
+            {
+                return;
+            }
+            const auto& all = encounters::of(*sav());
+            if (all.empty())
+            {
+                app::message("Catch in the wild", "PKForge has no encounter table for this game.");
+                return;
+            }
+            std::vector<screens::PickItem> items;
+            for (size_t i = 0; i < all.size(); i++)
+            {
+                if (i == 0 || all[i].species != all[i - 1].species)
+                {
+                    items.push_back({all[i].species, i18n::species(sav()->language(), pksm::Species{all[i].species}), ""});
+                }
+            }
+            Spot s = current();
+            app::push(screens::picker("Catch in the wild", std::move(items), 1, [this, s](int species)
+                {
+                    const auto& all = encounters::of(*sav());
+                    std::vector<screens::PickItem> spots;
+                    for (size_t i = 0; i < all.size(); i++)
+                    {
+                        const encounters::Slot& e = all[i];
+                        if (e.species != species)
+                        {
+                            continue;
+                        }
+                        std::string levels = e.max > e.min ? "Lv. " + std::to_string(e.min) + "-" + std::to_string(e.max)
+                                                           : "Lv. " + std::to_string(e.min);
+                        bool ok = encounters::catchable(*sav(), e);
+                        spots.push_back({int(i), encounters::place(*sav(), e) + "  -  " + encounters::kind(*sav(), e) + "  -  " + levels,
+                            ok ? "A catches one here." : "Shown only: PKForge can't make this kind legally yet."});
+                    }
+                    std::string title = i18n::species(sav()->language(), pksm::Species{u16(species)}) + ": where";
+                    app::push(screens::picker(title, std::move(spots), -1, [this, s](int index)
+                        {
+                            const encounters::Slot& e = encounters::of(*sav())[index];
+                            if (!encounters::catchable(*sav(), e))
+                            {
+                                app::message("Catch in the wild", "This kind of encounter needs an RNG step PKForge "
+                                                                  "does not model yet; pick another place.");
+                                return;
+                            }
+                            auto pk = freshPk();
+                            encounters::make(*pk, *sav(), e);
+                            writeSlot(s, pk.get());
+                            refresh();
+                            app::toast(i18n::species(sav()->language(), pk->species()) + " caught at " +
+                                       encounters::place(*sav(), e) + " (Lv. " + std::to_string(pk->level()) +
+                                       "). Write the save to keep it.");
+                        }));
+                },
+                screens::PickPreview::Species));
         }
 
         void newEgg()
