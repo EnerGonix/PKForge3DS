@@ -15,4 +15,8 @@ namespace world
 {
     bool hasAny(const pksm::Sav& sav);
     void open(std::shared_ptr<OpenSave> save);
+    // Day Care / Nursery (Generations 3-7): what is deposited, whether an egg waits, and a withdraw into a box.
+    bool hasDayCare(const pksm::Sav& sav);
+    // changed runs after a withdraw, for the boxes on screen to show it.
+    void dayCare(std::shared_ptr<OpenSave> save, std::function<void()> changed = {});
 }

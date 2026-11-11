@@ -1,5 +1,6 @@
 #include "world.hpp"
 #include "app.hpp"
+#include "locks.hpp"
 #include "pkdata.hpp"
 
 #include "sav/Item.hpp"
@@ -739,9 +740,291 @@ namespace world
             o.push_back({"Close", []() {}});
             app::menu("One-time encounters", std::move(o));
         }
+
+        // ---------------------------------------------------------------- Day Care / Nursery
+        // As the Android PKForge's Day Care view: what is deposited (level, EXP gained) and whether an egg is
+        // ready, and a withdraw into the first free box slot, the gained EXP added as the game does (moves
+        // stay as they are). Eggs and the egg RNG are left to the game. Offsets from PKHeX (SAV3*, SAV4,
+        // Daycare5, Daycare6XY/AO, Daycare7).
+
+        struct DaySlot
+        {
+            u8* pk             = nullptr; // the stored (encrypted) Pokémon
+            int size           = 0;
+            const char* format = "";
+            u8* exp            = nullptr; // EXP gained, u32 (none in Generation 7)
+            u8* occupied       = nullptr; // set when occupied (Generations 5-7; before: species != 0)
+            int occupiedSize   = 0;
+            std::vector<std::pair<u8*, int>> clear; // bytes zeroed on withdraw
+        };
+
+        struct Facility
+        {
+            std::string name;
+            std::vector<DaySlot> slots;
+            bool egg = false;
+        };
+
+        std::vector<Facility> facilities(pksm::Sav& sav)
+        {
+            std::vector<Facility> out;
+            u8 v = u8(sav.version());
+            if (v >= 1 && v <= 5) // Ruby/Sapphire, Emerald, FireRed/LeafGreen: the large block
+            {
+                Game g      = gameOf(sav);
+                bool rs     = g == Game::RS;
+                int base    = g == Game::E ? 0x3030 : g == Game::FRLG ? 0x2F80 : 0x2F9C;
+                int slotLen = rs ? 80 : 80 + 0x38 + 4;
+                Facility f{g == Game::FRLG ? "Four Island Day Care" : "Route 117 Day Care", {}, false};
+                for (int i = 0; i < 2; i++)
+                {
+                    DaySlot s;
+                    s.pk     = gen3Large(sav, base + i * slotLen);
+                    s.size   = 80;
+                    s.format = "PK3";
+                    s.exp    = gen3Large(sav, rs ? base + 160 + 2 * 0x38 + 4 * i : base + (i + 1) * slotLen - 4);
+                    if (!s.pk || !s.exp)
+                    {
+                        return {};
+                    }
+                    s.clear = {{s.pk, rs ? 80 : slotLen}, {s.exp, 4}};
+                    if (rs)
+                    {
+                        if (u8* mail = gen3Large(sav, base + 160 + i * 0x38))
+                        {
+                            s.clear.push_back({mail, 0x38});
+                        }
+                    }
+                    f.slots.push_back(s);
+                }
+                f.egg = flag(sav, g, g == Game::FRLG ? 0x266 : 0x86);
+                out.push_back(f);
+            }
+            else if (v == 7 || v == 8 || v == 10 || v == 11 || v == 12) // HGSS, Diamond/Pearl, Platinum
+            {
+                u8* general = gen4General(sav);
+                if (!general)
+                {
+                    return {};
+                }
+                int base = v == 12 ? 0x1654 : v <= 8 ? 0x15FC : 0x141C;
+                Facility f{v <= 8 ? "Route 34 Day Care" : "Solaceon Town Day Care", {}, false};
+                for (int i = 0; i < 2; i++)
+                {
+                    DaySlot s;
+                    s.pk     = general + base + i * 236;
+                    s.size   = 136;
+                    s.format = "PK4";
+                    s.exp    = general + base + i * 236 + 236 - 4;
+                    s.clear  = {{s.pk, 236}};
+                    f.slots.push_back(s);
+                }
+                f.egg = rd32(general + base + 2 * 236) != 0; // the egg's PID, set while one is waiting
+                out.push_back(f);
+            }
+            else if (v >= 20 && v <= 23) // Black/White, Black 2/White 2: block 50
+            {
+                u8* block = raw(sav) + (v <= 21 ? 0x20E00 : 0x20D00);
+                Facility f{"Route 3 Day Care", {}, false};
+                for (int i = 0; i < 2; i++)
+                {
+                    u8* at = block + i * 228;
+                    DaySlot s;
+                    s.occupied     = at;
+                    s.occupiedSize = 4;
+                    s.pk           = at + 4;
+                    s.size         = 136;
+                    s.format       = "PK5";
+                    s.exp          = at + 4 + 220;
+                    s.clear        = {{at, 228}};
+                    f.slots.push_back(s);
+                }
+                f.egg = block[0x1C8] & 1;
+                out.push_back(f);
+            }
+            else if (v >= 24 && v <= 27) // X/Y, Omega Ruby/Alpha Sapphire: block 38 (ORAS has two)
+            {
+                bool oras = v >= 26;
+                u8* block = raw(sav) + (oras ? 0x1BC00 : 0x1B200);
+                for (int d = 0; d < (oras ? 2 : 1); d++)
+                {
+                    u8* couple = block + d * 0x1F0;
+                    Facility f{oras ? (d == 0 ? "Route 117 Day Care" : "Battle Resort Day Care") : "Route 7 Day Care", {}, false};
+                    for (int i = 0; i < 2; i++)
+                    {
+                        u8* at = couple + i * 240;
+                        DaySlot s;
+                        s.occupied     = at;
+                        s.occupiedSize = 1;
+                        s.exp          = at + 4;
+                        s.pk           = at + 8;
+                        s.size         = 232;
+                        s.format       = "PK6";
+                        s.clear        = {{at, 240}};
+                        f.slots.push_back(s);
+                    }
+                    f.egg = couple[0x1E0] == 1;
+                    out.push_back(f);
+                }
+            }
+            else if (v >= 30 && v <= 33) // Sun/Moon, Ultra Sun/Ultra Moon: block 33
+            {
+                u8* block = raw(sav) + (v <= 31 ? 0x6B400 : 0x6BA00);
+                Facility f{"Paniola Ranch Nursery", {}, false};
+                for (int i = 0; i < 2; i++)
+                {
+                    u8* at = block + i * 233;
+                    DaySlot s;
+                    s.occupied     = at;
+                    s.occupiedSize = 1;
+                    s.pk           = at + 1;
+                    s.size         = 232;
+                    s.format       = "PK7";
+                    s.clear        = {{at, 233}};
+                    f.slots.push_back(s);
+                }
+                f.egg = block[0x1D8] == 1;
+                out.push_back(f);
+            }
+            return out;
+        }
+
+        // The Pokémon in a slot (nullptr when empty), with the EXP it gained added.
+        std::unique_ptr<pksm::PKX> deposited(const DaySlot& s)
+        {
+            if (s.occupied && (s.occupiedSize == 4 ? rd32(s.occupied) : s.occupied[0]) == 0)
+            {
+                return nullptr;
+            }
+            auto pk = pkdata::fromBytes(s.format, s.pk, s.size);
+            if (!pk || pk->species() == pksm::Species::None)
+            {
+                return nullptr;
+            }
+            if (s.exp)
+            {
+                u32 gained = rd32(s.exp);
+                if (gained)
+                {
+                    pk->experience(pk->experience() + gained);
+                    if (pk->level() >= 100)
+                    {
+                        pk->level(100);
+                    }
+                    pk->refreshChecksum(); // changed data: the game rejects a stale checksum as a Bad Egg
+                }
+            }
+            return pk;
+        }
+
+        void withdraw(std::shared_ptr<OpenSave> save, int facility, int slot, const std::function<void()>& changed)
+        {
+            auto all = facilities(*save->sav);
+            if (facility >= int(all.size()) || slot >= int(all[facility].slots.size()))
+            {
+                return;
+            }
+            const DaySlot& s = all[facility].slots[slot];
+            auto pk          = deposited(s);
+            if (!pk)
+            {
+                return;
+            }
+            pksm::Sav& sav = *save->sav;
+            int perBox     = sav.maxSlot() / sav.maxBoxes();
+            for (int b = 0; b < sav.maxBoxes(); b++)
+            {
+                if (locks::locked(save->ref.path, b))
+                {
+                    continue;
+                }
+                for (int i = 0; i < perBox; i++)
+                {
+                    auto there = sav.pkm(u8(b), u8(i));
+                    if (there && there->species() != pksm::Species::None)
+                    {
+                        continue;
+                    }
+                    sav.pkm(*pk, u8(b), u8(i), false);
+                    for (auto& [at, len] : s.clear)
+                    {
+                        memset(at, 0, len);
+                    }
+                    save->dirty = true;
+                    if (changed)
+                    {
+                        changed();
+                    }
+                    char where[48];
+                    snprintf(where, sizeof(where), " is in Box %d, slot %d.", b + 1, i + 1);
+                    app::message("Day Care", pkdata::species(u16(pk->species())) + where + " Write the save to keep it.");
+                    return;
+                }
+            }
+            app::message("Day Care", "Every box is full (or locked): free a slot first.");
+        }
+
+        void dayCareSlotMenu(std::shared_ptr<OpenSave> save, int facility, int slot, std::function<void()> changed)
+        {
+            auto all = facilities(*save->sav);
+            if (facility >= int(all.size()) || slot >= int(all[facility].slots.size()))
+            {
+                return;
+            }
+            auto pk = deposited(all[facility].slots[slot]);
+            if (!pk)
+            {
+                return;
+            }
+            app::confirm(pkdata::species(u16(pk->species())) + " leaves the " + all[facility].name +
+                             " for the first free box slot, with the EXP it gained. Write the save to keep it (a "
+                             "restore point is kept first).",
+                [save, facility, slot, changed]() { withdraw(save, facility, slot, changed); }, "Withdraw");
+        }
     }
 
     bool hasAny(const pksm::Sav& sav) { return gameOf(sav) != Game::None; }
+
+    bool hasDayCare(const pksm::Sav& sav)
+    {
+        u8 v = u8(sav.version());
+        return (v >= 1 && v <= 5) || v == 7 || v == 8 || (v >= 10 && v <= 12) || (v >= 20 && v <= 27) || (v >= 30 && v <= 33);
+    }
+
+    void dayCare(std::shared_ptr<OpenSave> save, std::function<void()> changed)
+    {
+        auto all = facilities(*save->sav);
+        if (all.empty())
+        {
+            app::message("Day Care", "The Day Care was not found in this save.");
+            return;
+        }
+        std::vector<app::Option> o;
+        for (int f = 0; f < int(all.size()); f++)
+        {
+            for (int i = 0; i < int(all[f].slots.size()); i++)
+            {
+                auto pk           = deposited(all[f].slots[i]);
+                std::string label = (all.size() > 1 ? all[f].name + " " : std::string("Slot ")) + std::to_string(i + 1) + ": ";
+                if (!pk)
+                {
+                    o.push_back({label + "empty", []() {}, all[f].name, false});
+                    continue;
+                }
+                std::string detail = pkdata::species(u16(pk->species())) + ", Lv. " + std::to_string(pk->level());
+                if (all[f].slots[i].exp)
+                {
+                    detail += ", +" + std::to_string(rd32(all[f].slots[i].exp)) + " EXP";
+                }
+                o.push_back({label + pk->nickname() + " Lv. " + std::to_string(pk->level()),
+                    [save, f, i, changed]() { dayCareSlotMenu(save, f, i, changed); }, detail + ". A withdraws it into a free box slot."});
+            }
+            o.push_back({all[f].egg ? "An egg is waiting" : "No egg waiting", []() {},
+                all[f].egg ? "Talk to the Day Care man in the game to take it." : "", false});
+        }
+        o.push_back({"Close", []() {}});
+        app::menu(all.size() > 1 ? "Day Cares" : all[0].name, std::move(o));
+    }
 
     void open(std::shared_ptr<OpenSave> save)
     {

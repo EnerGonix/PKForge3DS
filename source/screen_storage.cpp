@@ -1446,6 +1446,11 @@ namespace
                 }
                 if (side == Side::Save)
                 {
+                    if (world::hasDayCare(*sav()))
+                    {
+                        o.push_back({"Day Care", [this]() { world::dayCare(save, [this]() { refresh(); }); },
+                            "Who is deposited, the EXP gained, whether an egg waits; withdraw into a box."});
+                    }
                     if (world::hasAny(*sav()))
                     {
                         o.push_back({"World & events", [this]() { if (!hardcoreBlocks()) world::open(save); },

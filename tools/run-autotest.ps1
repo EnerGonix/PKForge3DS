@@ -11,6 +11,22 @@ Copy-Item $Script "$sd\autotest.txt" -Force
 $expected = (Select-String -Path $Script -Pattern '^shot ').Count
 if (-not $App) { $App = "$root\PKForge.3dsx" }
 $p = Start-Process -FilePath "C:\Program Files\Azahar\azahar.exe" -ArgumentList "`"$App`"" -PassThru
+# Show Azahar on the second monitor when there is one (the main one stays free).
+Add-Type -AssemblyName System.Windows.Forms
+$second = [System.Windows.Forms.Screen]::AllScreens | Where-Object { -not $_.Primary } | Select-Object -First 1
+if ($second) {
+    Add-Type -Namespace Win32 -Name Window -MemberDefinition '[DllImport("user32.dll")] public static extern bool MoveWindow(System.IntPtr h, int x, int y, int w, int ht, bool repaint);' -ErrorAction SilentlyContinue
+    $until = (Get-Date).AddSeconds(15)
+    while ((Get-Date) -lt $until -and -not $p.HasExited) {
+        $p.Refresh()
+        if ($p.MainWindowHandle -ne [System.IntPtr]::Zero) {
+            $b = $second.WorkingArea
+            [Win32.Window]::MoveWindow($p.MainWindowHandle, $b.X + 40, $b.Y + 40, [Math]::Min(1000, $b.Width - 80), [Math]::Min(900, $b.Height - 80), $true) | Out-Null
+            break
+        }
+        Start-Sleep -Milliseconds 200
+    }
+}
 $deadline = (Get-Date).AddSeconds($Timeout)
 while ((Get-Date) -lt $deadline) {
     $fresh = @(Get-ChildItem "$sd\shots" -Filter *.bmp | Where-Object { $_.LastWriteTime -gt $stamp })
