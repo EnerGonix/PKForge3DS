@@ -6,6 +6,8 @@
 
 #include "app.hpp"
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace updater
 {
@@ -15,4 +17,6 @@ namespace updater
     std::string available();
     // The update screen: check, show what is new, download and install on A.
     std::unique_ptr<Screen> open();
+    // One verified HTTPS GET (the updater's curl + mbedtls, its root certificates), the whole body into out.
+    bool fetch(const std::string& url, std::vector<u8>& out, std::string& error);
 }

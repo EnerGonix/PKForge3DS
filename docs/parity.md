@@ -40,7 +40,7 @@ Moon) and GameCube Colosseum/XD; Let's Go and the Switch games are out of scope.
 | ROM hack: Luminescent Platinum | - | out of scope (Switch BDSP hack) |
 | Colosseum / XD (.gci) | gamecube.cpp (decrypt, checksums, CK3/XK3 as PK3, Shadow data kept) | done (bag and Strategy Memo not edited) |
 | RetroArch save containers, SRAM padding | container (RZIP, chip padding, RTC footer; put back on write) | done |
-| Collection Center (community event collections, online) | - | **to do** |
+| Collection Center (community event collections, online) | Bank START > Collection Center (RoC's PC via GitHub, a week's cache) | done |
 | Sprite pack downloader (online) | - | to decide (sprites are built in) |
 | Second screen (Thor/Ayn dual screen) | top screen inspector | done by design (the 3DS has two screens) |
 | Gen 8/9 save blocks, Move Shop, Grand Underground, Tera | - | out of scope (Switch) |

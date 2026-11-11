@@ -3,6 +3,7 @@
 // writing takes deposits back out of the Bank, and withdrawn Pokémon stay in the Bank until then.
 #include "audio.hpp"
 #include "romhack.hpp"
+#include "collection.hpp"
 #include "bank.hpp"
 #include "encounters.hpp"
 #include "dexedit.hpp"
@@ -1595,6 +1596,8 @@ namespace
                     "Every .pk1-.pk9/.pb7/.pa8/.pa9 file in sdmc:/3ds/PKForge/import."});
             }
             o.push_back({"Poképark", []() { app::push(screens::park()); }, "Your Bank's Pokémon living in the park."});
+            o.push_back({"Collection Center", [this]() { collection::open(); refresh(); },
+                "The community's event collections (RoC's PC), into the Bank. Needs Wi-Fi."});
             o.push_back({"Sound", []() { screens::soundMenu(); }, "Music and sound effects, on or off."});
             o.push_back({"Receive by QR (camera)", [this]()
                 { app::push(qr::scan([this](std::vector<u8> payload) { receiveQr(payload); })); },

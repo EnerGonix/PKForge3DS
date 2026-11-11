@@ -839,6 +839,23 @@ namespace updater
         };
     }
 
+    bool fetch(const std::string& url, std::vector<u8>& out, std::string& error)
+    {
+        Net net;
+        if (!net.ok)
+        {
+            error = "No connection. Is the Wi-Fi on?";
+            return false;
+        }
+        out.clear();
+        return get(url, [&out](const u8* d, u32 n)
+            {
+                out.insert(out.end(), d, d + n);
+                return out.size() < 8 * 1024 * 1024;
+            },
+            error);
+    }
+
     void checkInBackground()
     {
         std::string text;
