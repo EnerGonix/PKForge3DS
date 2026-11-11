@@ -3,6 +3,7 @@
 #include "locks.hpp"
 #include "pkdata.hpp"
 
+#include "pkx/PK2.hpp"
 #include "sav/Item.hpp"
 #include "sav/Sav4.hpp"
 #include "utils/ValueConverter.hpp"
@@ -754,7 +755,10 @@ namespace world
             const char* format = "";
             u8* exp            = nullptr; // EXP gained, u32 (none in Generation 7)
             u8* occupied       = nullptr; // set when occupied (Generations 5-7; before: species != 0)
-            int occupiedSize   = 0;
+            int occupiedSize   = 0;       // 1, 4, or -1 for Gen 2's flag bit (bit 0 of a byte shared with others)
+            u8* nick           = nullptr; // Gen 2: the nickname and trainer name beside the 32-byte Pokémon
+            u8* ot             = nullptr;
+            int nameLength     = 0;
             std::vector<std::pair<u8*, int>> clear; // bytes zeroed on withdraw
         };
 
@@ -769,7 +773,37 @@ namespace world
         {
             std::vector<Facility> out;
             u8 v = u8(sav.version());
-            if (v >= 1 && v <= 5) // Ruby/Sapphire, Emerald, FireRed/LeafGreen: the large block
+            if (v >= 39 && v <= 41) // Gold, Silver, Crystal: after the Pokédex (PKHeX SAV2Offsets.Daycare)
+            {
+                bool jp  = sav.language() == pksm::Language::JPN;
+                bool kor = sav.language() == pksm::Language::KOR;
+                int seen = kor ? 0x2AAE : v == 41 ? (jp ? 0x29CA : 0x2A47) : (jp ? 0x29EE : 0x2A6C);
+                int name = jp ? 6 : 11;
+                u8* at   = raw(sav) + seen + 0x1F + 28 + 1;
+                Facility f{"Route 34 Day Care", {}, false};
+                f.egg = (at[0] & 0x40) != 0;
+                u8* flags = at;
+                u8* body  = at + 1;
+                for (int i = 0; i < 2; i++)
+                {
+                    DaySlot s;
+                    s.occupied     = flags;
+                    s.occupiedSize = -1;
+                    s.nick         = body;
+                    s.ot           = body + name;
+                    s.pk           = body + 2 * name;
+                    s.size         = 32;
+                    s.format       = "PK2";
+                    s.nameLength   = name;
+                    s.clear        = {{s.pk, 32}};
+                    f.slots.push_back(s);
+                    // the second slot comes after the Lady's flags, the steps and the Ditto state
+                    flags = body + 2 * name + 32;
+                    body  = flags + 3;
+                }
+                out.push_back(f);
+            }
+            else if (v >= 1 && v <= 5) // Ruby/Sapphire, Emerald, FireRed/LeafGreen: the large block
             {
                 Game g      = gameOf(sav);
                 bool rs     = g == Game::RS;
@@ -892,11 +926,29 @@ namespace world
         // The Pokémon in a slot (nullptr when empty), with the EXP it gained added.
         std::unique_ptr<pksm::PKX> deposited(const DaySlot& s)
         {
-            if (s.occupied && (s.occupiedSize == 4 ? rd32(s.occupied) : s.occupied[0]) == 0)
+            if (s.occupied && (s.occupiedSize == 4 ? rd32(s.occupied) : s.occupiedSize < 0 ? s.occupied[0] & 1 : s.occupied[0]) == 0)
             {
                 return nullptr;
             }
-            auto pk = pkdata::fromBytes(s.format, s.pk, s.size);
+            std::unique_ptr<pksm::PKX> pk;
+            if (s.nick)
+            {
+                // Gen 2: PKSM-Core's layout, as Sav2 builds a box Pokémon (list marker, species, end; the
+                // 48-byte party struct holding the 32 stored bytes; trainer name; nickname).
+                u8 buffer[pksm::PK2::INT_LENGTH_WITH_NAMES] = {0x01, s.pk[0], 0xFF};
+                std::copy(s.pk, s.pk + 32, buffer + 3);
+                std::copy(s.ot, s.ot + s.nameLength, buffer + 3 + pksm::PK2::PARTY_LENGTH);
+                std::copy(s.nick, s.nick + s.nameLength, buffer + 3 + pksm::PK2::PARTY_LENGTH + s.nameLength);
+                pk = pkdata::fromBytes("PK2", buffer, 3 + pksm::PK2::PARTY_LENGTH + 2 * s.nameLength);
+                if (pk)
+                {
+                    static_cast<pksm::PK2&>(*pk).updatePartyData();
+                }
+            }
+            else
+            {
+                pk = pkdata::fromBytes(s.format, s.pk, s.size);
+            }
             if (!pk || pk->species() == pksm::Species::None)
             {
                 return nullptr;
@@ -950,6 +1002,10 @@ namespace world
                     {
                         memset(at, 0, len);
                     }
+                    if (s.occupiedSize < 0)
+                    {
+                        s.occupied[0] &= 0xFE; // Gen 2: only the slot's bit, the rest of the byte stays
+                    }
                     save->dirty = true;
                     if (changed)
                     {
@@ -988,7 +1044,8 @@ namespace world
     bool hasDayCare(const pksm::Sav& sav)
     {
         u8 v = u8(sav.version());
-        return (v >= 1 && v <= 5) || v == 7 || v == 8 || (v >= 10 && v <= 12) || (v >= 20 && v <= 27) || (v >= 30 && v <= 33);
+        return (v >= 39 && v <= 41) || (v >= 1 && v <= 5) || v == 7 || v == 8 || (v >= 10 && v <= 12) ||
+               (v >= 20 && v <= 27) || (v >= 30 && v <= 33);
     }
 
     void dayCare(std::shared_ptr<OpenSave> save, std::function<void()> changed)
