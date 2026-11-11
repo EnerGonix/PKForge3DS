@@ -11,6 +11,8 @@ release tags are `3ds-vX.Y.Z` (the plain `vX.Y.Z` tags in this fork belong to th
   A quiet check runs once a day.
 - **Quick guide**: a few pages on the basics, shown on the first start and from Settings › Quick guide.
 - **Search this save**: find Pokémon by name across the party and every box (save START menu).
+- **Day Care / Nursery** (Generations 3 to 7): who is deposited, the EXP gained, whether an egg waits, and a
+  withdraw into a free box slot (save START menu › Day Care).
 - **3D HOME Menu banner**: PKForge's logo as a real 3D model (cyan lines in relief, plain blue back),
   shown in stereoscopic 3D, with a new banner sound (a device clacking open, then a ball opening).
 - **Cursor sound**: a soft tick when the D-pad or Circle Pad moves the cursor.

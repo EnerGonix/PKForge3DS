@@ -1,0 +1,23 @@
+name: Feature request
+description: An idea for PKForge 3DS.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        PKForge 3DS covers the games up to Ultra Sun and Ultra Moon (Generations 1 to 7); Let's Go and the Switch games are out of scope.
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like PKForge 3DS to do?
+    validations:
+      required: true
+  - type: input
+    id: games
+    attributes:
+      label: Which games is it for?
+      placeholder: "All / Emerald / HeartGold / Ultra Sun..."
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it would help (optional)

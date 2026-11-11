@@ -1,0 +1,46 @@
+name: Bug report
+description: Something in PKForge 3DS does not work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! PKForge 3DS is the 3DS port; for the Android app, use [sofianeelhor/PKForge](https://github.com/sofianeelhor/PKForge/issues).
+        Every save write keeps a restore point in `sdmc:/3ds/PKForge/backups`, so a broken save can be put back.
+  - type: input
+    id: version
+    attributes:
+      label: PKForge 3DS version
+      description: Settings › Check for updates shows it (or FBI / 3dsDL).
+      placeholder: "1.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: console
+    attributes:
+      label: Console
+      options:
+        - New 3DS / New 3DS XL / New 2DS XL
+        - Old 3DS / 3DS XL / 2DS
+        - Azahar (emulator)
+    validations:
+      required: true
+  - type: input
+    id: game
+    attributes:
+      label: Game and where the save comes from
+      placeholder: "FireRed, from an R4 card / Ultra Moon cartridge / Platinum .sav from DeSmuME"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead. Screenshots help.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Files that help (optional)
+      description: "`sdmc:/3ds/PKForge/audio.log` for sound problems, `perf.log` for slowdowns. Do not attach saves you do not want to share."
