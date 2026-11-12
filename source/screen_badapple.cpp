@@ -2,7 +2,6 @@
 #include "audio.hpp"
 #include "files.hpp"
 #include "gfx.hpp"
-#include "m4a.hpp"
 #include "pkdata.hpp"
 #include "screens.hpp"
 #include "updater.hpp"
@@ -20,21 +19,26 @@ using namespace gfx;
 // The About screen's easter egg, as the Android PKForge's (BadAppleEgg, BadApplePainter): Bad Apple!! as text art
 // made of Pokémon names, one character per 2x2 block of the video, the stream of names scrolling as it plays,
 // the picture following the song's clock. The video's frames (BAPL: 12-byte header, then gzip-packed XOR deltas)
-// and the song are not shipped with this port: the first time, PKForge fetches the original's own files
-// (frames.bin and audio.m4a from github.com/sofianeelhor/PKForge) into sdmc:/3ds/PKForge/badapple and turns
-// the AAC song into badapple.wav once. A badapple.mp3/.ogg/.wav of the player's own there is used first.
+// and the song are the original's own (frames.bin and audio.m4a), shipped in the RomFS as the Android app ships
+// them, so it starts at once; the music player decodes the AAC song as it plays. A build without them fetches
+// them from github.com/sofianeelhor/PKForge into sdmc:/3ds/PKForge/badapple once.
 namespace
 {
     constexpr const char* DIR  = "sdmc:/3ds/PKForge/badapple";
     constexpr const char* FROM = "https://raw.githubusercontent.com/sofianeelhor/PKForge/main/src/PKForge.App/Resources/BadApple/";
 
-    std::string framesPath() { return std::string(DIR) + "/frames.bin"; }
+    constexpr const char* ROM  = "romfs:/badapple";
+
+    std::string framesPath()
+    {
+        std::string rom = std::string(ROM) + "/frames.bin";
+        return files::exists(rom) ? rom : std::string(DIR) + "/frames.bin";
+    }
 
     std::string songPath()
     {
-        for (const char* ext : {".mp3", ".ogg", ".wav"})
+        for (std::string song : {std::string(ROM) + "/audio.m4a", std::string(DIR) + "/audio.m4a"})
         {
-            std::string song = std::string(DIR) + "/badapple" + ext;
             if (files::exists(song))
             {
                 return song;
@@ -288,7 +292,7 @@ namespace
             bool good = true;
             auto get  = [&](const char* name, const char* label) {
                 std::string to = std::string(DIR) + "/" + name;
-                if (!good || files::exists(to))
+                if (!good || files::exists(to) || files::exists(std::string(ROM) + "/" + name))
                 {
                     return;
                 }
@@ -301,25 +305,13 @@ namespace
                     why = "could not save " + std::string(name);
                 }
             };
-            get("frames.bin", "Getting the video...");
+            if (!files::exists(framesPath()))
+            {
+                get("frames.bin", "Getting the video...");
+            }
             if (songPath().empty())
             {
                 get("audio.m4a", "Getting the song...");
-                if (good)
-                {
-                    step = "Preparing the song...";
-                    part = 0;
-                    std::string m = std::string(DIR) + "/audio.m4a";
-                    good = m4a::toWav(m, std::string(DIR) + "/badapple.wav", why, [this](float f) {
-                        part = f;
-                        return !cancel.load();
-                    });
-                    part = -1;
-                    if (good)
-                    {
-                        remove(m.c_str());
-                    }
-                }
             }
             error = good ? "" : why;
             ok    = good;

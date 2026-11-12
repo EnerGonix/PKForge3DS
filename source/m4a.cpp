@@ -2,7 +2,9 @@
 #include "files.hpp"
 
 #include <array>
+#include <algorithm>
 #include <cstdio>
+#include <memory>
 #include <cstring>
 #include <neaacdec.h>
 #include <vector>
@@ -210,48 +212,46 @@ namespace
             p = next;
         }
     }
-
-    void le16(FILE* f, unsigned v) { u8 b[2] = {u8(v), u8(v >> 8)}; fwrite(b, 1, 2, f); }
-    void le32(FILE* f, u32 v) { u8 b[4] = {u8(v), u8(v >> 8), u8(v >> 16), u8(v >> 24)}; fwrite(b, 1, 4, f); }
-
-    void wavHeader(FILE* f, u32 rate, unsigned channels, u32 bytes)
-    {
-        fseek(f, 0, SEEK_SET);
-        fwrite("RIFF", 1, 4, f);
-        le32(f, 36 + bytes);
-        fwrite("WAVEfmt ", 1, 8, f);
-        le32(f, 16);
-        le16(f, 1);
-        le16(f, channels);
-        le32(f, rate);
-        le32(f, rate * channels * 2);
-        le16(f, channels * 2);
-        le16(f, 16);
-        fwrite("data", 1, 4, f);
-        le32(f, bytes);
-    }
 }
 
 namespace m4a
 {
-    bool toWav(const std::string& from, const std::string& to, std::string& error, const std::function<bool(float)>& progress)
+    struct Stream::Impl
     {
         std::vector<u8> file;
-        if (!files::read(from, file))
+        std::vector<u64> offsets;
+        std::vector<u32> sizes;
+        NeAACDecHandle dec = nullptr;
+        size_t next        = 0;
+        std::vector<s16> pending; // decoded samples not handed out yet
+        size_t used        = 0;
+
+        ~Impl()
         {
-            error = "Could not read " + from;
+            if (dec)
+            {
+                NeAACDecClose(dec);
+            }
+        }
+    };
+
+    Stream::Stream() = default;
+    Stream::~Stream() = default;
+
+    bool Stream::open(const std::string& path)
+    {
+        auto m = std::make_unique<Impl>();
+        if (!files::read(path, m->file))
+        {
             return false;
         }
         Track t;
-        boxes(file.data(), file.data() + file.size(), t);
+        boxes(m->file.data(), m->file.data() + m->file.size(), t);
         if (t.config.empty() || t.sizes.empty() || t.chunks.empty() || t.runs.empty())
         {
-            error = "No AAC track in the file";
             return false;
         }
         // Each sample's place in the file, chunk by chunk.
-        std::vector<u64> offsets;
-        offsets.reserve(t.sizes.size());
         size_t sample = 0;
         for (size_t c = 0; c < t.chunks.size() && sample < t.sizes.size(); c++)
         {
@@ -266,78 +266,76 @@ namespace m4a
             u64 at = t.chunks[c];
             for (u32 i = 0; i < per && sample < t.sizes.size(); i++, sample++)
             {
-                offsets.push_back(at);
+                if (at + t.sizes[sample] > m->file.size())
+                {
+                    break;
+                }
+                m->offsets.push_back(at);
+                m->sizes.push_back(t.sizes[sample]);
                 at += t.sizes[sample];
             }
         }
-
-        NeAACDecHandle dec = NeAACDecOpen();
-        NeAACDecConfigurationPtr cfg = NeAACDecGetCurrentConfiguration(dec);
+        m->dec = NeAACDecOpen();
+        NeAACDecConfigurationPtr cfg = NeAACDecGetCurrentConfiguration(m->dec);
         cfg->outputFormat            = FAAD_FMT_16BIT;
         cfg->downMatrix              = 1; // at most stereo
-        NeAACDecSetConfiguration(dec, cfg);
-        unsigned long rate = 0;
-        unsigned char channels = 0;
-        if (NeAACDecInit2(dec, t.config.data(), (unsigned long)t.config.size(), &rate, &channels) < 0)
+        NeAACDecSetConfiguration(m->dec, cfg);
+        unsigned long r   = 0;
+        unsigned char ch  = 0;
+        if (NeAACDecInit2(m->dec, t.config.data(), (unsigned long)t.config.size(), &r, &ch) < 0 || !r || !ch)
         {
-            NeAACDecClose(dec);
-            error = "Unsupported AAC settings";
             return false;
         }
-        FILE* f = fopen(to.c_str(), "wb");
-        if (!f)
-        {
-            NeAACDecClose(dec);
-            error = "Could not write " + to;
-            return false;
-        }
-        std::vector<u8> buffer(256 * 1024);
-        setvbuf(f, nullptr, _IOFBF, 64 * 1024);
-        wavHeader(f, u32(rate), channels, 0);
-        u32 bytes = 0;
-        unsigned outChannels = channels;
-        bool ok = true;
-        for (size_t i = 0; i < offsets.size(); i++)
-        {
-            if (offsets[i] + t.sizes[i] > file.size())
-            {
-                break;
-            }
-            NeAACDecFrameInfo info;
-            void* pcm = NeAACDecDecode(dec, &info, file.data() + offsets[i], t.sizes[i]);
-            if (info.error)
-            {
-                continue; // one bad frame: skip it, as players do
-            }
-            if (pcm && info.samples)
-            {
-                outChannels = info.channels ? info.channels : outChannels;
-                size_t n = info.samples * 2;
-                fwrite(pcm, 1, n, f);
-                bytes += u32(n);
-            }
-            if (progress && (i & 63) == 0 && !progress(float(i) / offsets.size()))
-            {
-                ok    = false;
-                error = "Stopped";
-                break;
-            }
-        }
-        NeAACDecClose(dec);
-        if (ok && bytes)
-        {
-            wavHeader(f, u32(rate), outChannels, bytes);
-        }
-        fclose(f);
-        if (!ok || !bytes)
-        {
-            remove(to.c_str());
-            if (error.empty())
-            {
-                error = "The song could not be decoded";
-            }
-            return false;
-        }
+        rate     = int(r);
+        channels = ch > 2 ? 2 : int(ch);
+        impl     = std::move(m);
         return true;
+    }
+
+    int Stream::read(s16* out, int frames)
+    {
+        if (!impl)
+        {
+            return 0;
+        }
+        Impl& m  = *impl;
+        int done = 0;
+        while (done < frames)
+        {
+            if (m.used >= m.pending.size())
+            {
+                if (m.next >= m.offsets.size())
+                {
+                    break;
+                }
+                NeAACDecFrameInfo info;
+                void* pcm = NeAACDecDecode(m.dec, &info, m.file.data() + m.offsets[m.next], m.sizes[m.next]);
+                m.next++;
+                m.pending.clear();
+                m.used = 0;
+                if (info.error || !pcm || !info.samples)
+                {
+                    continue; // one bad frame: skip it, as players do
+                }
+                const s16* p = static_cast<const s16*>(pcm);
+                int got      = info.channels ? info.channels : channels;
+                size_t n     = info.samples / size_t(got);
+                for (size_t i = 0; i < n; i++)
+                {
+                    s16 l = p[i * got], rr = got > 1 ? p[i * got + 1] : l;
+                    m.pending.push_back(l);
+                    if (channels == 2)
+                    {
+                        m.pending.push_back(rr);
+                    }
+                }
+                continue;
+            }
+            size_t take = std::min(size_t(frames - done) * channels, m.pending.size() - m.used);
+            memcpy(out + size_t(done) * channels, m.pending.data() + m.used, take * sizeof(s16));
+            m.used += take;
+            done += int(take / channels);
+        }
+        return done;
     }
 }

@@ -1,14 +1,26 @@
-// AAC songs in .m4a files (the Android PKForge's Bad Apple!! song), turned once into a .wav the music
-// player can stream: a small MP4 reader for the one audio track and faad2 (GPLv2+) for the AAC frames.
+// AAC songs in .m4a files (the Android PKForge's Bad Apple!! song), decoded as they play: a small MP4 reader for
+// the one audio track and faad2 (GPLv2+, external/faad2) for the AAC frames.
 #pragma once
 
-#include <functional>
+#include <3ds/types.h>
+#include <memory>
 #include <string>
 
 namespace m4a
 {
-    // Decodes the first AAC track of `from` into a 16-bit PCM .wav at `to`. progress gets 0..1 now and then;
-    // returning false from it stops the work. On any failure `to` is removed and error says why.
-    bool toWav(const std::string& from, const std::string& to, std::string& error,
-        const std::function<bool(float)>& progress = {});
+    class Stream
+    {
+    public:
+        Stream();
+        ~Stream();
+        // Reads the whole file (a song is a couple of MB) and readies the decoder for its first AAC track.
+        bool open(const std::string& path);
+        // Up to `frames` interleaved 16-bit frames (channels samples each); 0 at the end.
+        int read(s16* out, int frames);
+        int rate = 0, channels = 0;
+
+    private:
+        struct Impl;
+        std::unique_ptr<Impl> impl;
+    };
 }

@@ -33,7 +33,6 @@ wait 6
 press A
 wait 30
 shot ba0
-press A
 wait 120
 shot ba1
 wait 600

@@ -44,5 +44,5 @@ Moon) and GameCube Colosseum/XD; Let's Go and the Switch games are out of scope.
 | Sprite pack downloader (online) | Settings > HOME renders (renders pulled one by one out of the original's pack by HTTP range; WebP via vendored libwebp) | done (HOME renders and animated Showdown sprites) |
 | Second screen (Thor/Ayn dual screen) | top screen inspector | done by design (the 3DS has two screens) |
 | Gen 8/9 save blocks, Move Shop, Grand Underground, Tera | - | out of scope (Switch) |
-| Bad Apple!! easter egg | About > Konami code (screen_badapple) | done (frames and song read from sdmc:/3ds/PKForge/badapple, not shipped: not free to share) |
+| Bad Apple!! easter egg | About > Konami code (screen_badapple) | done (the original's frames.bin and audio.m4a in the RomFS; AAC decoded as it plays with faad2) |
 | In-app updates | updater | done |

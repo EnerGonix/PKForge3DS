@@ -1,4 +1,5 @@
 #include "audio.hpp"
+#include "m4a.hpp"
 #include "files.hpp"
 
 #include <3ds.h>
@@ -83,7 +84,8 @@ namespace audio
             drmp3 mp3{};
             drwav wav{};
             stb_vorbis* ogg = nullptr;
-            int kind        = 0; // 1 mp3, 2 wav, 3 ogg
+            m4a::Stream aac;
+            int kind        = 0; // 1 mp3, 2 wav, 3 ogg, 4 m4a (AAC)
             ~FileSource() override
             {
                 if (kind == 1)
@@ -122,6 +124,12 @@ namespace audio
                     channels           = in.channels;
                     rate               = int(in.sample_rate);
                 }
+                else if (low.size() > 4 && low.compare(low.size() - 4, 4, ".m4a") == 0 && aac.open(path))
+                {
+                    kind     = 4;
+                    channels = aac.channels;
+                    rate     = aac.rate;
+                }
                 channels = std::clamp(channels, 1, 2);
                 return kind != 0;
             }
@@ -138,6 +146,10 @@ namespace audio
                 if (kind == 3)
                 {
                     return stb_vorbis_get_samples_short_interleaved(ogg, channels, out, frames * channels);
+                }
+                if (kind == 4)
+                {
+                    return aac.read(out, frames);
                 }
                 return 0;
             }
@@ -474,7 +486,7 @@ namespace audio
             {
                 size_t i = shuffleOn && playlist.size() > 1 ? size_t(rand()) % playlist.size() : size_t(track++) % playlist.size();
                 const std::string& t = playlist[i];
-                if (t.compare(0, 6, "romfs:") == 0)
+                if (t.compare(0, 6, "romfs:") == 0 && files::lower(t).find(".m4a") == std::string::npos)
                 {
                     auto pcm = std::make_unique<PcmSource>();
                     if (pcm->open(cacheOf(t)))

@@ -22,6 +22,12 @@ cp certs/*.der romfs/certs/
 mkdir -p romfs/licenses
 for lib in curl mbedtls zlib; do cp "$DEVKITPRO/portlibs/3ds/licenses/3ds-$lib/"* "romfs/licenses/$lib-$(ls "$DEVKITPRO/portlibs/3ds/licenses/3ds-$lib/")"; done
 cp external/libwebp/COPYING romfs/licenses/libwebp-COPYING.txt; cp external/libwebp/PATENTS romfs/licenses/libwebp-PATENTS.txt
+cp external/faad2/COPYING romfs/licenses/faad2-COPYING.txt
+# The About screen's Bad Apple!! easter egg: the original's own video and song, as the Android app ships them.
+if [ -d "$PKFORGE_SRC/src/PKForge.App/Resources/BadApple" ]; then
+	mkdir -p romfs/badapple
+	cp "$PKFORGE_SRC/src/PKForge.App/Resources/BadApple/frames.bin" "$PKFORGE_SRC/src/PKForge.App/Resources/BadApple/audio.m4a" romfs/badapple/
+fi
 tex3ds tools/ctr/title-logo.png -f rgba8 -z auto -o romfs/gfx/title.t3x
 # R4 PokéLink rides inside the RomFS; PKForge puts it on the SD card before starting it.
 make -C r4pokelink

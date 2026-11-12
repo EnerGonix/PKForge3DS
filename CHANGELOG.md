@@ -62,8 +62,8 @@ release tags are `3ds-vX.Y.Z` (the plain `vX.Y.Z` tags in this fork belong to th
   Radical Red / GS Chronicles Pokédex.
 - **Animated Showdown sprites** from the original's sprite pack (Settings > Sprites: built-in, HOME renders or
   animated).
-- The About screen's **Bad Apple!!** easter egg (↑↑↓↓←→←→ B A), playing the video and song from
-  3ds/PKForge/badapple on the SD card (they are not shipped with PKForge).
+- The About screen's **Bad Apple!!** easter egg (↑↑↓↓←→←→ B A), with the original's video and song, starting at
+  once (the AAC song is decoded as it plays, by faad2).
 
 ### Fixed
 - **Updates that stopped half-way**: a dropped or stalled connection now resumes where it stopped (HTTP
