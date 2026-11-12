@@ -58,6 +58,10 @@ release tags are `3ds-vX.Y.Z` (the plain `vX.Y.Z` tags in this fork belong to th
   into the Bank.
 - **HOME renders** from the original's sprite pack, fetched one by one when shown (or all at once).
 - **Move a Bank box** to another place from All boxes.
+- **Move to another game**: one Pokémon (X) or many (Multi-select) straight into another save, converted for
+  that game; the other save is written first, then this one, each with a restore point.
+- Multi-select **Withdraw to the save** asks once for the whole group (format changes, Pokémon that cannot go)
+  and fills the save's empty slots from the current box on; before, a format change could move the wrong one.
 - **Bags** for Colosseum/XD and the ROM hacks, the **Pokédex editor** for Colosseum's Strategy Memo and the
   Radical Red / GS Chronicles Pokédex.
 - **Animated Showdown sprites** from the original's sprite pack (Settings > Sprites: built-in, HOME renders or
