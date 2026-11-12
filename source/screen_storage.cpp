@@ -255,6 +255,16 @@ namespace
                         endMulti();
                     },
                     "Each into the Bank's first empty slot. Write the save to keep it."});
+                o.push_back({"Move to another game", [this, slots]()
+                    {
+                        std::vector<Spot> spots;
+                        for (int slot : slots)
+                        {
+                            spots.push_back(Spot{Side::Save, box(), slot, false});
+                        }
+                        moveToGame(spots);
+                    },
+                    "Straight into another save; both are written."});
                 o.push_back({"Duplicate", [this, slots]()
                     {
                         if (hardcoreBlocks())
@@ -273,17 +283,8 @@ namespace
             }
             else if (save)
             {
-                o.push_back({"Withdraw to the save", [this, slots]()
-                    {
-                        for (int slot : slots)
-                        {
-                            cursor = slot;
-                            hover();
-                            quickWithdraw();
-                        }
-                        endMulti();
-                    },
-                    "Into the save's current box. Write the save to keep it."});
+                o.push_back({"Withdraw to the save", [this, slots]() { withdrawMarked(slots); },
+                    "Into the save's empty slots from its current box on. Write the save to keep it."});
             }
             o.push_back({"Move to another box", [this, slots]() { moveMarked(slots); }, "Into its empty slots."});
             o.push_back({"Export .pk files", [this, slots]()
@@ -1300,21 +1301,21 @@ namespace
             return true;
         }
 
-        std::unique_ptr<pksm::PKX> intoSave(const pksm::PKX& pk, std::string& error)
+        static std::unique_ptr<pksm::PKX> convertFor(const pksm::PKX& pk, pksm::Sav& target, std::string& error)
         {
-            auto reason = romhack::is(*sav()) ? pksm::Sav::BadTransferReason::OKAY : sav()->invalidTransferReason(pk);
+            auto reason = romhack::is(target) ? pksm::Sav::BadTransferReason::OKAY : target.invalidTransferReason(pk);
             if (reason != pksm::Sav::BadTransferReason::OKAY && !hax::on())
             {
                 error = transferProblem(reason);
                 return nullptr;
             }
             std::unique_ptr<pksm::PKX> converted;
-            if (romhack::is(*sav()))
+            if (romhack::is(target))
             {
                 // A ROM hack takes any Pokémon whose species it has; its numbers come from the hack's tables.
-                if (!romhack::canHold(*sav(), pk))
+                if (!romhack::canHold(target, pk))
                 {
-                    error = std::string(romhack::name(romhack::hackOf(*sav()))) + " has no " + pkdata::species(u16(pk.species())) + ".";
+                    error = std::string(romhack::name(romhack::hackOf(target))) + " has no " + pkdata::species(u16(pk.species())) + ".";
                     return nullptr;
                 }
                 converted = pk.clone();
@@ -1324,13 +1325,13 @@ namespace
                 error = "A ROM hack Pokémon only moves into a ROM hack save (its numbers are the hack's own).";
                 return nullptr;
             }
-            else if (pkdata::format(pk) == pkdata::format(*sav()->emptyPkm()))
+            else if (pkdata::format(pk) == pkdata::format(*target.emptyPkm()))
             {
                 converted = pk.clone();
             }
             else
             {
-                converted = sav()->transfer(pk);
+                converted = target.transfer(pk);
             }
             if (!converted)
             {
@@ -1338,6 +1339,8 @@ namespace
             }
             return converted;
         }
+
+        std::unique_ptr<pksm::PKX> intoSave(const pksm::PKX& pk, std::string& error) { return convertFor(pk, *sav(), error); }
 
         bool withdraw(const Spot& to, std::string& error)
         {
@@ -1826,6 +1829,8 @@ namespace
                 {
                     o.push_back({"Send to the Bank", [this]() { quickDeposit(); },
                         "Into the first empty Bank slot. Write the save to keep it.", !leavesPartyEmpty(s, nullptr)});
+                    o.push_back({"Move to another game", [this, s]() { moveToGame({s}); },
+                        "Straight into another save; both are written.", !leavesPartyEmpty(s, nullptr)});
                 }
                 else if (save)
                 {
@@ -2127,6 +2132,275 @@ namespace
                     }
                 }
             }
+        }
+
+        // The marked Bank Pokémon into the save: converted for its game, into its empty slots from the current box
+        // on (locked boxes skipped). One question for the group when formats change or some cannot go.
+        void withdrawMarked(std::vector<int> slots)
+        {
+            struct Going
+            {
+                int slot;
+                std::unique_ptr<pksm::PKX> pk;
+            };
+            auto plan = std::make_shared<std::vector<Going>>();
+            int changing = 0;
+            std::vector<std::string> refused;
+            for (int slot : slots)
+            {
+                Spot at{Side::Bank, box(), slot, false};
+                const BankEntry* e = bank.at(at.box, at.slot);
+                if (!e || std::find(withdrawn.begin(), withdrawn.end(), e->id) != withdrawn.end())
+                {
+                    continue;
+                }
+                auto pk = read(at);
+                std::string why;
+                auto converted = pk ? intoSave(*pk, why) : nullptr;
+                if (!pk)
+                {
+                    why = "the 3DS port cannot open its format";
+                }
+                if (!converted)
+                {
+                    refused.push_back((pk ? pkdata::species(u16(pk->species())) : std::string("Slot ") + std::to_string(slot + 1)) + ": " + why);
+                    continue;
+                }
+                changing += preview::needed(*pk, *converted, *sav());
+                plan->push_back({slot, std::move(pk)});
+            }
+            if (plan->empty())
+            {
+                app::message("Cannot move", refused.empty() ? "Nothing to move." : refused.front());
+                return;
+            }
+            auto run = [this, plan]()
+            {
+                int moved = 0;
+                bool full = false;
+                for (auto& g : *plan)
+                {
+                    Spot to;
+                    if (!firstEmptySave(to))
+                    {
+                        full = true;
+                        break;
+                    }
+                    from     = Spot{Side::Bank, box(), g.slot, false};
+                    held     = std::move(g.pk);
+                    heldStub = false;
+                    std::string error;
+                    moved += withdraw(to, error);
+                    held.reset();
+                }
+                endMulti();
+                refresh();
+                app::toast(std::to_string(moved) + " moved to the save" + (full ? " (the save is full)" : "") + ". Write the save to finish.");
+            };
+            if (!changing && refused.empty())
+            {
+                run();
+                return;
+            }
+            std::string text = "Move " + std::to_string(plan->size()) + " Pokémon into " + pkdata::game(save->ref.version) + "?";
+            if (changing)
+            {
+                text += "\n" + std::to_string(changing) + " change format: moves, items or abilities the game lacks are dropped "
+                        "(one at a time shows each change).";
+            }
+            if (!refused.empty())
+            {
+                text += "\n" + std::to_string(refused.size()) + " cannot go: " + refused.front() + (refused.size() > 1 ? "..." : "");
+            }
+            app::confirm(text, run, "Move", "Cancel");
+        }
+
+        // The save's first empty box slot from its current box on, skipping locked boxes.
+        bool firstEmptySave(Spot& out) const
+        {
+            int boxes = sav()->maxBoxes();
+            for (int k = 0; k < boxes; k++)
+            {
+                int b = (saveBox + k) % boxes;
+                if (locks::locked(save->ref.path, b))
+                {
+                    continue;
+                }
+                for (int i = 0; i < COLS * ROWS; i++)
+                {
+                    Spot to{Side::Save, b, i, false};
+                    if (!read(to))
+                    {
+                        out = to;
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        // Pokémon of this save straight into another one: converted for that game, into its empty slots (box 1 on,
+        // locked boxes skipped), the other save written first (restore point kept), then this one. If this one
+        // cannot be written after the other was, they are in both and the player is told so.
+        void moveToGame(std::vector<Spot> spots)
+        {
+            if (!save)
+            {
+                return;
+            }
+            if (save->dirty)
+            {
+                app::message("Write first", "This save has changes not written yet. Write them (Y > Save data) or undo them, then move.");
+                return;
+            }
+            for (const Spot& sp : spots)
+            {
+                if (refuseLocked(sp))
+                {
+                    return;
+                }
+            }
+            std::vector<screens::PickItem> items;
+            auto refs = std::make_shared<std::vector<SaveRef>>();
+            for (const SaveRef& r : saves::found())
+            {
+                if (r.path == save->ref.path || !pkdata::inScope(r.gen, r.version))
+                {
+                    continue;
+                }
+                // The game and which file: several saves of one game are common.
+                items.push_back({int(refs->size()), (r.label.empty() ? pkdata::game(r.version) : r.label) + "  -  " +
+                    (r.isTitle() ? r.source : files::baseName(r.path)) + (r.ot.empty() ? "" : "  (" + r.ot + ")"), ""});
+                refs->push_back(r);
+            }
+            if (items.empty())
+            {
+                app::message("Move to another game", "No other save was found on the SD card.");
+                return;
+            }
+            app::push(screens::picker("Move to which game?", std::move(items), -1, [this, spots, refs](int pick)
+                {
+                    const SaveRef& ref = (*refs)[size_t(pick)];
+                    std::string error;
+                    std::shared_ptr<OpenSave> other = OpenSave::open(ref, error);
+                    if (!other || !other->sav)
+                    {
+                        app::message("Cannot open", error.empty() ? "That save could not be opened." : error);
+                        return;
+                    }
+                    pksm::Sav& target = *other->sav;
+                    int slotsPerBox   = target.maxBoxes() ? target.maxSlot() / target.maxBoxes() : 30;
+                    // Where each goes, decided now; nothing is written before the player says yes.
+                    auto placed = std::make_shared<std::vector<std::pair<Spot, std::array<int, 2>>>>();
+                    auto made   = std::make_shared<std::vector<std::unique_ptr<pksm::PKX>>>();
+                    std::vector<std::string> refused;
+                    int changing = 0, b = 0, i = 0;
+                    auto nextEmpty = [&](int& ob, int& os)
+                    {
+                        for (; b < target.maxBoxes(); b++, i = 0)
+                        {
+                            if (locks::locked(ref.path, b))
+                            {
+                                continue;
+                            }
+                            for (; i < slotsPerBox; i++)
+                            {
+                                auto there = target.pkm(u8(b), u8(i));
+                                if (!there || !u16(there->species()))
+                                {
+                                    ob = b;
+                                    os = i++;
+                                    return true;
+                                }
+                            }
+                        }
+                        return false;
+                    };
+                    for (const Spot& sp : spots)
+                    {
+                        auto pk = read(sp);
+                        if (!pk)
+                        {
+                            continue;
+                        }
+                        std::string why;
+                        auto converted = convertFor(*pk, target, why);
+                        if (!converted)
+                        {
+                            refused.push_back(pkdata::species(u16(pk->species())) + ": " + why);
+                            continue;
+                        }
+                        int ob = 0, os = 0;
+                        if (!nextEmpty(ob, os))
+                        {
+                            refused.push_back("no room left in " + pkdata::game(ref.version));
+                            break;
+                        }
+                        changing += preview::needed(*pk, *converted, target);
+                        placed->push_back({sp, {ob, os}});
+                        made->push_back(std::move(converted));
+                    }
+                    if (placed->empty())
+                    {
+                        app::message("Cannot move", refused.empty() ? "Nothing to move." : refused.front());
+                        return;
+                    }
+                    std::string game = ref.label.empty() ? pkdata::game(ref.version) : ref.label;
+                    std::string text = "Move " + std::to_string(placed->size()) + " Pokémon to " + game + "?";
+                    if (changing)
+                    {
+                        text += "\n" + std::to_string(changing) + " change format: moves, items or abilities that game lacks are dropped.";
+                    }
+                    if (!refused.empty())
+                    {
+                        text += "\n" + std::to_string(refused.size()) + " cannot go: " + refused.front() + (refused.size() > 1 ? "..." : "");
+                    }
+                    text += "\nBoth saves are written; restore points are kept first.";
+                    app::confirm(text, [this, other, placed, made, game]()
+                        {
+                            pksm::Sav& target = *other->sav;
+                            for (size_t k = 0; k < placed->size(); k++)
+                            {
+                                auto& at = (*placed)[k].second;
+                                target.pkm(*(*made)[k], u8(at[0]), u8(at[1]), false);
+                                target.dex(*(*made)[k]);
+                            }
+                            other->dirty = true;
+                            std::string error;
+                            if (!other->write(error))
+                            {
+                                app::message("Not moved", game + " could not be written: " + error + "\nNothing changed.");
+                                return;
+                            }
+                            // Out of this save: party slots last, highest first, so the party stays packed right.
+                            std::vector<Spot> leaving;
+                            for (auto& pl : *placed)
+                            {
+                                leaving.push_back(pl.first);
+                            }
+                            std::sort(leaving.begin(), leaving.end(), [](const Spot& x, const Spot& y)
+                                { return x.party != y.party ? !x.party : x.slot > y.slot; });
+                            for (const Spot& sp : leaving)
+                            {
+                                writeSlot(sp, nullptr);
+                            }
+                            if (!save->write(error))
+                            {
+                                app::message("Copied, not moved", "They are in " + game + " now, but this save could not be written (" +
+                                                                        error + "), so they are still here too.");
+                                refresh();
+                                return;
+                            }
+                            saves::changed(other->ref.path);
+                            if (multi)
+                            {
+                                endMulti();
+                            }
+                            refresh();
+                            app::toast(std::to_string(placed->size()) + " moved to " + game + ". Both saves written.");
+                        },
+                        "Move", "Cancel");
+                }));
         }
 
         void quickWithdraw()

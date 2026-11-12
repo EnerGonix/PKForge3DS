@@ -1,0 +1,4 @@
+open sdmc:/3ds/PKForge/saves/test-pt.sav
+wait 200
+shot p0
+quit
