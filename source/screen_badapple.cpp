@@ -137,11 +137,10 @@ namespace
                 wrap(30, 80, 340, msg, rgb(235, 240, 255), 1, 8);
                 return;
             }
+            // The whole top screen (400x240, wider than the video's 4:3): cells a little wider than tall.
             int cols = w / 2, rows = h / 2;
-            float cell = std::min(float(TOP_W) / cols, float(H) / rows);
-            float left = (TOP_W - cell * cols) / 2, top = (H - cell * rows) / 2;
+            float cw = float(TOP_W) / cols, ch = float(H) / rows;
             // A character of the names in each light cell: full blocks bright, edges softer.
-            char one[2] = {0, 0};
             for (int r = 0; r < rows; r++)
             {
                 for (int c = 0; c < cols; c++)
@@ -152,22 +151,24 @@ namespace
                     {
                         continue;
                     }
-                    one[0] = words[size_t((r * cols + c + index) % int(words.size()))];
-                    text(left + c * cell + cell / 2, top + r * cell, one, cover == 4 ? rgb(235, 240, 255) : rgb(150, 160, 190),
-                        Center, cell / 8.0f);
+                    char one = words[size_t((r * cols + c + index) % int(words.size()))];
+                    glyph(c * cw + cw / 2, r * ch, one, cover == 4 ? rgb(235, 240, 255) : rgb(150, 160, 190), cw / 8.0f, ch / 8.0f);
                 }
             }
         }
 
         void drawBottom() override
         {
-            housing(0, 0, BOTTOM_W, H);
             if (playing)
             {
-                widgets::header(BOTTOM_W, "Bad Apple!!", std::to_string(index * 100 / std::max(1, count)) + "%");
-                text(BOTTOM_W / 2, 110, "B or a tap stops it.", T::InkSoft, Center);
+                // Dark, like the screen above: only the progress, quietly.
+                rect(0, 0, BOTTOM_W, H, rgb(0, 0, 0));
+                rect(20, H - 14, BOTTOM_W - 40, 2, rgb(40, 44, 56));
+                rect(20, H - 14, float(BOTTOM_W - 40) * index / std::max(1, count), 2, rgb(150, 160, 190));
+                text(BOTTOM_W / 2, 112, "Bad Apple!!", rgb(150, 160, 190), Center);
                 return;
             }
+            housing(0, 0, BOTTOM_W, H);
             widgets::header(BOTTOM_W, "Bad Apple!!", "");
             if (worker)
             {

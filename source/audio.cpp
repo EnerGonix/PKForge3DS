@@ -538,7 +538,8 @@ namespace audio
                     musicRate     = source->rate;
                     configureMusicChannel();
                 }
-                for (int i = 0; i < BUFFERS && wantMusic && !pausedFlag; i++)
+                bool egg = !overridePath.empty(); // the About screen's song plays even with the music off or paused
+                for (int i = 0; i < BUFFERS && ((wantMusic && !pausedFlag) || egg); i++)
                 {
                     ndspWaveBuf& w = waves[i];
                     if (w.status != NDSP_WBUF_DONE && w.status != NDSP_WBUF_FREE)
@@ -571,7 +572,7 @@ namespace audio
                     DSP_FlushDataCache(data, CHUNK * 2 * sizeof(s16));
                     ndspChnWaveBufAdd(MUSIC, &w);
                 }
-                if (!wantMusic)
+                if (!wantMusic && !egg)
                 {
                     ndspChnWaveBufClear(MUSIC);
                     for (auto& w : waves)
@@ -846,7 +847,7 @@ namespace audio
             wanted = Place(pendingPlace.load());
         }
         running   = true;
-        thread    = threadCreate(musicThread, nullptr, 32 * 1024, appPriority - 1, -2, false);
+        thread    = threadCreate(musicThread, nullptr, 256 * 1024, appPriority - 1, -2, false);
         converter = threadCreate(convertThread, nullptr, 256 * 1024, 0x3F, -2, false);
     }
 

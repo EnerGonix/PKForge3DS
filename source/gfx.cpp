@@ -541,6 +541,15 @@ namespace gfx
         return width;
     }
 
+    void glyph(float x, float y, char c, u32 color, float sx, float sy)
+    {
+        char s[2] = {c, 0};
+        C2D_Text t;
+        C2D_TextFontParse(&t, font, textBuf, s);
+        float w = textWidth(s, 1) * sx;
+        C2D_DrawText(&t, C2D_WithColor, x - w / 2, y, 0.5f, nativeScale * sx, nativeScale * sy, color);
+    }
+
     float wrap(float x, float y, float width, std::string_view s, u32 color, float scale, int maxLines)
     {
         std::string line;

@@ -99,6 +99,8 @@ namespace gfx
     float textWidth(std::string_view s, float scale = 1);
     // Draws text with its top at y. maxWidth > 0 shortens it with an ellipsis. Returns the width drawn.
     float text(float x, float y, std::string_view s, u32 color, Align align = Left, float scale = 1, float maxWidth = 0);
+    // One character of PKForge's font centred on x, its top at y, scaled sx across and sy down.
+    void glyph(float x, float y, char c, u32 color, float sx, float sy);
     // Wrapped text; returns the height used.
     float wrap(float x, float y, float width, std::string_view s, u32 color, float scale = 1, int maxLines = 0);
     std::string ellipsize(std::string_view s, float maxWidth, float scale = 1);
