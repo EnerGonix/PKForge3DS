@@ -29,7 +29,8 @@ SOURCES		:=	source \
 				external/audio \
 				external/libwebp/src/dec \
 				external/libwebp/src/dsp \
-				external/libwebp/src/utils
+				external/libwebp/src/utils \
+				external/faad2/libfaad
 DATA		:=	data
 INCLUDES	:=	include \
 				external/qrcodegen \
@@ -38,6 +39,7 @@ INCLUDES	:=	include \
 				external/audio \
 				external/libwebp \
 				external/libwebp/src \
+				external/faad2/libfaad \
 				$(CORE)/include \
 				$(CORE)/include/enums \
 				$(CORE)/include/personal \
