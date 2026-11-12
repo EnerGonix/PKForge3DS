@@ -159,9 +159,7 @@ Settings › Check for updates downloads the newest `PKForge.cia` from this page
 its SHA-256 against GitHub's and installs it, then restarts. A quiet check runs once a day.
 
 ### Not in this port
-Let's Go, the Switch games and the Switch ROM hack Luminescent Platinum are out of scope. The Bad Apple!! easter egg
-(↑↑↓↓←→←→ B A on the About screen) carries the original's own video and song, as PKForge for Android does.
-"Bad Apple!!" is Alstroemeria Records' arrangement of ZUN's music from Touhou; it belongs to them.
+Let's Go, the Switch games and the Switch ROM hack Luminescent Platinum are out of scope.
 
 ## Install and update
 
@@ -222,7 +220,7 @@ independently (section and Pokémon checksums).
 - PKSM-Core by FlagBrew (Bernardo Giordano, Admiral Fish, piepie62 and contributors), GPLv3 with
   Additional Terms 7.b and 7.c, kept unmodified in `external/PKSM-Core`; memecrypto by SciresM;
   pcg-cpp by Melissa O'Neill.
-- faad2 (GPLv2 or later, `external/faad2`), the AAC decoder that plays the Bad Apple!! song.
+- faad2 (GPLv2 or later, `external/faad2`), the AAC decoder.
 - libwebp by Google (BSD licence, `external/libwebp`), the WebP decoder behind the HOME renders; RoC's PC by
   ReignOfComputer, the event collections the Collection Center browses.
 - PKHeX by Kaphotics and contributors: the research behind PKSM-Core, and (GPLv3) the wild encounter tables,
